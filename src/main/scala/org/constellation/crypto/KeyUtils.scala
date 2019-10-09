@@ -290,7 +290,7 @@ object WalletKeyStore extends App {
     val p12File = better.files.File(keyDir + "/keystoretest.p12").toJava
     val bksFile = better.files.File(keyDir + "/keystoretest.bks").toJava
     val pass = password.toCharArray
-    println("testGetKeys" + "\n")
+//    println("testGetKeys" + "\n")
 
     //    val (p12A, bksA) = WalletKeyStore.makeWalletKeyStore(
     //      saveCertTo = Some(p12File),
