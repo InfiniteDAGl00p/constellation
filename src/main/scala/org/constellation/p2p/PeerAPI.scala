@@ -236,7 +236,9 @@ class PeerAPI(override val ipManager: IPManager[IO])(
                         logger.warn(s"Missing height when accepting block $baseHash")
                         complete(StatusCodes.BadRequest)
                       case (2, _) =>
-                        callback.unsafeToFuture()
+                        (IO
+                          .contextShift(ConstellationExecutionContext.bounded)
+                          .shift >> callback).unsafeRunAsyncAndForget
                         complete(StatusCodes.Accepted)
                       case (nextHeight, Some(Height(min, max))) if nextHeight > min =>
                         logger.debug(
@@ -245,7 +247,9 @@ class PeerAPI(override val ipManager: IPManager[IO])(
                         )
                         complete(StatusCodes.Conflict)
                       case (_, _) =>
-                        callback.unsafeToFuture()
+                        (IO
+                          .contextShift(ConstellationExecutionContext.bounded)
+                          .shift >> callback).unsafeRunAsyncAndForget
                         complete(StatusCodes.Accepted)
                     }
                   }

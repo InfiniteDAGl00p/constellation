@@ -191,8 +191,8 @@ class CheckpointAcceptanceService[F[_]: Concurrent](
 
   def acceptErrorHandler(err: Throwable): F[Unit] =
     err match {
-      case knownError @ (CheckpointAcceptBlockAlreadyStored(_) | PendingAcceptance(_)) =>
-        knownError.raiseError[F, Unit]
+      case CheckpointAcceptBlockAlreadyStored(_) | PendingAcceptance(_) =>
+        Sync[F].unit
       case otherError =>
         Sync[F].delay(logger.error(s"Error when accepting block: ${otherError.getMessage}")) >> dao.metrics
           .incrementMetricAsync[F]("acceptCheckpoint_failure") >> otherError.raiseError[F, Unit]
