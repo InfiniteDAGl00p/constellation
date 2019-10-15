@@ -282,7 +282,7 @@ object WalletKeyStore extends App {
     (privKey, pubKey)
   }
 
-  def testGetKeys(password: String = "fakepassword") = {
+  def loadOrGetKeys(password: String = "fakepassword") = {
     import java.security.Security
     Security.addProvider(new BouncyCastleProvider)
     val dagDir = System.getProperty("user.home") +"/.dag"//todo dry by putting into own into files
@@ -422,7 +422,7 @@ object WalletKeyStore extends App {
     val dagDir = System.getProperty("user.home") +"/.dag"//todo dry by putting into own into files
     val certFile = better.files.File(dagDir + "/cert")
     val encKs = better.files.File(dagDir + "/encrypted_keystore")
-    makeWalletKeyStore("password".toCharArray, Some(certFile.toJava), Some(encKs.toJava))
+//    makeWalletKeyStore("password".toCharArray, Some(certFile.toJava), Some(encKs.toJava))
 //  }
 
 }

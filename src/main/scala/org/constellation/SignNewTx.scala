@@ -28,7 +28,7 @@ object GetOrCreateKeys
   val dagDir = System.getProperty("user.home") +"/.dag"//todo dry by putting into own into files
   val acctDir = dagDir + "/acct"
   val keyDir = dagDir + "/key"
-  val (privKey, pubKey) = WalletKeyStore.testGetKeys(password)
+  val (privKey, pubKey) = WalletKeyStore.loadOrGetKeys(password)
   val keyPair = new KeyPair(pubKey, privKey)
 
   if (unEncrypt) {
@@ -60,7 +60,7 @@ object SignNewTx extends App {
 //  val p12File = better.files.File(keyDir + "keystoretest.p12").toJava
 //  val bksFile = better.files.File(keyDir + "keystoretest.bks").toJava
 
-  val (privKey, pubKey)  = WalletKeyStore.testGetKeys(newTxData.pass)//testGetKeys()
+  val (privKey, pubKey)  = WalletKeyStore.loadOrGetKeys(newTxData.pass)//testGetKeys()
 
 
 //  val p12 = KeyStore.getInstance("PKCS12", "BC")
