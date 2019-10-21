@@ -64,10 +64,8 @@ object GetOrCreateKeys
     decryptedOutput.write(keyPair.getPrivate.getEncoded)
     decryptedOutput.close()
   }
-  else {
     pemWriter.writeObject(pemObj)
     pemWriter.close()
-  }
 }
 
 object SignNewTx extends App {
