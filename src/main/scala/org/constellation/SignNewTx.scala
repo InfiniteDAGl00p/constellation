@@ -10,15 +10,34 @@ import java.nio.file.Paths
 import java.security._
 
 import constellation._
+import org.bouncycastle.asn1.{ASN1Encodable, ASN1Sequence}
+import org.bouncycastle.asn1.x9.X9ObjectIdentifiers
+import org.bouncycastle.util.io.pem.{PemObject, PemWriter}
 import org.constellation.SignNewTx.{TxData, args}
 //import org.constellation.GetOrCreateKeys.dagDir
 import org.constellation.crypto.WalletKeyStore
 import java.io._
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo
+import org.bouncycastle.asn1.ASN1Object
 
+class ASN1ObjectInstance(pKI: PrivateKeyInfo) extends ASN1Object {
+  def toASN1Primitive = pKI.parsePrivateKey().toASN1Primitive
 
+  override def getEncoded(str: String): Array[Byte] = super.getEncoded(str)
+}
 
 object GetOrCreateKeys
   extends App {
+  def toPemFormat(keyPair: KeyPair): ASN1ObjectInstance = {
+    val privateKeyInfo: PrivateKeyInfo = PrivateKeyInfo.getInstance(ASN1Sequence.getInstance(keyPair.getPrivate.getEncoded))
+    val isEC = privateKeyInfo.getPrivateKeyAlgorithm().getAlgorithm().equals(X9ObjectIdentifiers.id_ecPublicKey)
+    if (! isEC) {
+      throw new Exception ("not EC key")
+    } else {
+      val getASN1: ASN1ObjectInstance = new ASN1ObjectInstance(privateKeyInfo)
+      getASN1
+    }
+  }
   val (password, unEncrypt) = args match {
     case Array(pw, storeUnencrypted) => (pw, storeUnencrypted.toBoolean)
     case Array(pw) => (pw, false)
@@ -30,15 +49,24 @@ object GetOrCreateKeys
   val keyDir = dagDir + "/key"
   val (privKey, pubKey) = WalletKeyStore.loadOrGetKeys(password)
   val keyPair = new KeyPair(pubKey, privKey)
+  val pemEncoded: ASN1ObjectInstance = toPemFormat(keyPair)
+
+  val keyOutput = new FileOutputStream(keyDir)
+  val pemWriter = new PemWriter(new OutputStreamWriter(keyOutput))
+  val pemObj = new PemObject("EC PRIVATE KEY", pemEncoded.getEncoded("DER"))//todo read keys from file and use new PemReader(new FileReader(keyFileName)
 
   if (unEncrypt) {
     val decryptedFile = File(dagDir + "/decrypted").toJava
     if (!decryptedFile.exists()) {
       decryptedFile.createNewFile()
     }
-    val output = new FileOutputStream(decryptedFile)
-    output.write(keyPair.getPrivate.getEncoded)
-    output.close()
+    val decryptedOutput = new FileOutputStream(decryptedFile)
+    decryptedOutput.write(keyPair.getPrivate.getEncoded)
+    decryptedOutput.close()
+  }
+  else {
+    pemWriter.writeObject(pemObj)
+    pemWriter.close()
   }
 }
 
