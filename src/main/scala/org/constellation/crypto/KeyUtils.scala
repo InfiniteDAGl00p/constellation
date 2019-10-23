@@ -252,9 +252,9 @@ object KeyUtils extends StrictLogging {
 
 
 object WalletKeyStore extends App {
-  import java.io.FileOutputStream
   import java.io.File
   import java.security.KeyStore
+  import java.io.FileOutputStream
 
   val ECDSA = "ECDsA"
 
@@ -265,63 +265,29 @@ object WalletKeyStore extends App {
     keyGen.generateKeyPair
   }
 
-  def loadSecureKeys(password: String = "fakepassword") = {
-
-    val dagDir = System.getProperty("user.home") +"/.dag"//todo dry by putting into own into files
-    val keyDir = dagDir + "/encrypted_key"
-    val p12File = better.files.File(keyDir + "keystoretest.p12").toJava
-    val bksFile = better.files.File(keyDir + "keystoretest.bks").toJava
-
-    val p12 = KeyStore.getInstance("PKCS12", "BC")
-    p12.load(new java.io.FileInputStream(p12File), password.toCharArray)
-
-    val bks: KeyStore = KeyStore.getInstance("BKS", "BC")
-    bks.load(new FileInputStream(bksFile), password.toCharArray)
-
-    val privKey: PrivateKey = bks.getKey("test_rsa", password.toCharArray).asInstanceOf[PrivateKey]
-    val pubKey: PublicKey = p12.getCertificate("test_cert").getPublicKey
-    (privKey, pubKey)
-  }
-
   def loadOrGetKeys(password: String = "fakepassword") = {
     import java.security.Security
     Security.addProvider(new BouncyCastleProvider)
+
     val dagDir = System.getProperty("user.home") +"/.dag"//todo dry by putting into own into files
     val keyDir = dagDir + "/encrypted_key"
     val keyStoreFile = better.files.File(keyDir + "/keystore.p12").toJava
     val pubDir = keyDir + "/pub.pem"
     val pubFile = better.files.File(pubDir).toJava
     val pass = password.toCharArray
-//    println("testGetKeys" + "\n")
-
-    //    val (p12A, bksA) = WalletKeyStore.makeWalletKeyStore(
-    //      saveCertTo = Some(p12File),
-    //      savePairsTo = Some(bksFile),
-    //      password = pass,
-    //      numECDSAKeys = 10
-    //    )
 
     if (!keyStoreFile.exists() | !pubFile.exists()) {
       better.files.File(keyDir).createDirectory()
       keyStoreFile.createNewFile()
       pubFile.createNewFile()
-      val p12A = makeWalletKeyStore(pass, Some(keyStoreFile), Some(pubDir))
+      val p12A = makeWalletKeyStore(pass, Some(keyStoreFile), Some(pubDir))//todo stick to PKCS12 its language agnostic
       val pub = p12A.getCertificate("test_cert").getPublicKey
       val priv = p12A.getKey("test_rsa", pass).asInstanceOf[PrivateKey]
-      //(bksA.getKey("test_rsa", pass).asInstanceOf[PrivateKey], p12A.getCertificate("test_cert").getPublicKey)//todo PKCS12 is language agnostic
       (priv, pub)
     } else {
-
       val p12 = KeyStore.getInstance("PKCS12", "BC")
       p12.load(new java.io.FileInputStream(keyStoreFile), pass)
 
-//      val bks: KeyStore = KeyStore.getInstance("BKS", "BC")
-//      bks.load(new FileInputStream(bksFile), pass)
-
-//      val protParam = new KeyStore.PasswordProtection(pass)
-
-      //    assert(p12A.getCertificate("test_cert") == p12.getCertificate("test_cert"))
-//      val privKey: Key = bks.getKey("test_rsa", pass)
       val publicKey: PublicKey = p12.getCertificate("test_cert").getPublicKey
       val privKey = p12.getKey("test_rsa", pass).asInstanceOf[PrivateKey]
 //          assert(publicKey.isInstanceOf[PublicKey])//todo move to test
@@ -331,7 +297,6 @@ object WalletKeyStore extends App {
       val result = selector.`match`(p12.getCertificate("test_cert"))
 //      assert(result)// todo move to test
 //      saveCertAsPem(p12.getCertificate("test_cert"), s"/Users/wyatt/.dag/pub.pem")
-
       (privKey.asInstanceOf[PrivateKey], publicKey)
     }
   }
@@ -361,8 +326,7 @@ object WalletKeyStore extends App {
     // Note this requires JDK 8u151 +
     // https://stackoverflow.com/questions/6481627/java-security-illegal-key-size-or-default-parameters
     Security.setProperty("crypto.policy", "unlimited")
-    // java.lang.SecurityException: JCE cannot authenticate the provider SC
-    // Use BC for now, for some reason SC not working. Just google it theres a fix.
+
     val bcProvider: provider.BouncyCastleProvider = new org.bouncycastle.jce.provider.BouncyCastleProvider()
     val getProv = KeyUtils.insertProvider()
     val prov = bcProvider // makeProvider
@@ -382,34 +346,15 @@ object WalletKeyStore extends App {
     val random = new SecureRandom()
 
     val subjectPublicKeyInfo = SubjectPublicKeyInfo.getInstance(keyPair.getPublic.getEncoded)
-    val v1CertGen = new X509v1CertificateBuilder(x500Name, BigInteger.valueOf(random.nextLong()),startDate,endDate,x500Name,subjectPublicKeyInfo)//(x500Name, BigInteger.valueOf(random.nextLong()), startDate, endDate)//
-    //(X500Name issuer, BigInteger serial, Date notBefore, Date notAfter, X500Name subject, SubjectPublicKeyInfo publicKeyInfo)
-
+    val v1CertGen = new X509v1CertificateBuilder(x500Name, BigInteger.valueOf(random.nextLong()),startDate,endDate,x500Name,subjectPublicKeyInfo)
     val sigGen = new JcaContentSignerBuilder("SHA512withECDSA")
       .setProvider(getProv).build(keyPair.getPrivate)//todo test prov -> insertProvider in .setProvider
-
     val x509CertificateHolder = v1CertGen.build(sigGen)
-
     val certf = CertificateFactory.getInstance("X.509")
     val cert = certf.generateCertificate(new ByteArrayInputStream(x509CertificateHolder.getEncoded))
-
-    // There's another solution here: https://stackoverflow.com/questions/13894699/java-how-to-store-a-key-in-keystore
-    // Maybe worth looking at we'll see. This works for now.
-    // Theres a lot of different keystores we actually need to support.
-    // PKCS12 for the SSL certs (between nodes unless they get a proper cert from lets encrypt) is easy
-    // BKS is also easy
-    // There's a lot more and more details to get into. This is pretty complicated but this can serve
-    // As an initial example to at least get the right classes in place.
     val ks: KeyStore = KeyStore.getInstance("PKCS12", bcProvider)
+
     ks.load(null, password)
-    // https://stackoverflow.com/questions/6656263/why-do-i-get-the-error-cannot-store-non-privatekeys-when-creating-an-ssl-socke
-    // ^ in case next step is confusing:
-
-    import java.io.FileOutputStream
-//    import java.security.KeyStore
-//    val bks: KeyStore = KeyStore.getInstance("BKS", "BC")
-//    bks.load(null, null)
-
     ks.setCertificateEntry(certEntryName, cert)
     ks.setKeyEntry(rsaEntryName, keyPair.getPrivate, password, Array(cert))
 
@@ -417,41 +362,5 @@ object WalletKeyStore extends App {
     ks.store(new FileOutputStream(saveKSTo.get), password)
 
     ks
-
-    //    val ecdsaKeys = Seq.fill(numECDSAKeys){makeKeyPairFrom(provider = getProv)}
-
-//    ecdsaKeys.zipWithIndex.foreach {
-//      case (k, i) =>
-//        bks.setCertificateEntry(certEntryName, cert)
-//        bks.setKeyEntry(rsaEntryName, keyPair.getPrivate, password, Array(cert))
-//        bks.setKeyEntry(s"${ecdsaEntryNamePrefix}_priv_" + i, k.getPrivate, password, Array(cert))
-//        bks.setKeyEntry(s"${ecdsaEntryNamePrefix}_pub_" + i, k.getPublic, password, Array(cert))
-//    }
-//    savePairsTo.foreach { file =>
-//      bks.store(new FileOutputStream(file), password)
-//    }
-//
-//    saveCertTo.foreach { file =>
-//      ks.store(new FileOutputStream(file), password)
-//    }
-
-
-//    saveCertAsPem(ks.getCertificate("test_cert"), s"/Users/wyatt/.dag/pem_test")
-
-//    ks -> bks
   }
-
-//  def apply(args: Array[String]) = {
-//    val password: Array[Char] = args(0).toCharArray
-//    val saveCertTo: File = File(args(1)).toJava
-//    val savePairsTo: File = File(args(2)).toJava
-//    makeWalletKeyStore(password, Some(saveCertTo), Some(savePairsTo))
-    val dagDir = System.getProperty("user.home") +"/.dag"//todo dry by putting into own into files
-    val certFile = better.files.File(dagDir + "/cert")
-    val encKs = better.files.File(dagDir + "/encrypted_keystore")
-//    makeWalletKeyStore("password".toCharArray, Some(certFile.toJava), Some(encKs.toJava))
-//  }
-
 }
-
-
