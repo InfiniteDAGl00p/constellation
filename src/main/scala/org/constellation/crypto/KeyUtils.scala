@@ -1,8 +1,8 @@
 package org.constellation.crypto
 
-import java.io.{ByteArrayInputStream, FileInputStream}
+import java.io.{ByteArrayInputStream, FileInputStream, FileWriter}
 import java.math.BigInteger
-import java.security.cert.CertificateFactory
+import java.security.cert.{Certificate, CertificateFactory, X509CertSelector}
 import java.security.spec.{ECGenParameterSpec, PKCS8EncodedKeySpec, X509EncodedKeySpec}
 import java.security.{KeyFactory, SecureRandom, _}
 import java.util.{Base64, Date}
@@ -16,6 +16,7 @@ import org.spongycastle.asn1.x500.{X500Name, X500NameBuilder}
 import org.spongycastle.asn1.x500.style.BCStyle
 import org.spongycastle.asn1.x509.SubjectPublicKeyInfo
 import org.spongycastle.cert.X509v1CertificateBuilder
+import org.spongycastle.openssl.PEMWriter
 import org.spongycastle.operator.jcajce.JcaContentSignerBuilder
 
 /**
@@ -287,8 +288,9 @@ object WalletKeyStore extends App {
     Security.addProvider(new BouncyCastleProvider)
     val dagDir = System.getProperty("user.home") +"/.dag"//todo dry by putting into own into files
     val keyDir = dagDir + "/encrypted_key"
-    val p12File = better.files.File(keyDir + "/keystoretest.p12").toJava
-    val bksFile = better.files.File(keyDir + "/keystoretest.bks").toJava
+    val keyStoreFile = better.files.File(keyDir + "/keystore.p12").toJava
+    val pubDir = keyDir + "/pub.pem"
+    val pubFile = better.files.File(pubDir).toJava
     val pass = password.toCharArray
 //    println("testGetKeys" + "\n")
 
@@ -299,35 +301,52 @@ object WalletKeyStore extends App {
     //      numECDSAKeys = 10
     //    )
 
-    if (!p12File.exists() | !bksFile.exists()) {
+    if (!keyStoreFile.exists() | !pubFile.exists()) {
       better.files.File(keyDir).createDirectory()
-      p12File.createNewFile()
-      bksFile.createNewFile()
-      val (p12A, bksA) = makeWalletKeyStore(pass, Some(p12File), Some(bksFile))
-      (bksA.getKey("test_rsa", pass).asInstanceOf[PrivateKey], p12A.getCertificate("test_cert").getPublicKey)
+      keyStoreFile.createNewFile()
+      pubFile.createNewFile()
+      val p12A = makeWalletKeyStore(pass, Some(keyStoreFile), Some(pubDir))
+      val pub = p12A.getCertificate("test_cert").getPublicKey
+      val priv = p12A.getKey("test_rsa", pass).asInstanceOf[PrivateKey]
+      //(bksA.getKey("test_rsa", pass).asInstanceOf[PrivateKey], p12A.getCertificate("test_cert").getPublicKey)//todo PKCS12 is language agnostic
+      (priv, pub)
     } else {
 
       val p12 = KeyStore.getInstance("PKCS12", "BC")
-      p12.load(new java.io.FileInputStream(p12File), pass)
+      p12.load(new java.io.FileInputStream(keyStoreFile), pass)
 
-      val bks: KeyStore = KeyStore.getInstance("BKS", "BC")
-      bks.load(new FileInputStream(bksFile), pass)
+//      val bks: KeyStore = KeyStore.getInstance("BKS", "BC")
+//      bks.load(new FileInputStream(bksFile), pass)
 
 //      val protParam = new KeyStore.PasswordProtection(pass)
 
       //    assert(p12A.getCertificate("test_cert") == p12.getCertificate("test_cert"))
-      val privKey: Key = bks.getKey("test_rsa", pass)
-      //    assert(privKey.isInstanceOf[PrivateKey])
+//      val privKey: Key = bks.getKey("test_rsa", pass)
       val publicKey: PublicKey = p12.getCertificate("test_cert").getPublicKey
-      //    assert(publicKey.isInstanceOf[PublicKey])
+      val privKey = p12.getKey("test_rsa", pass).asInstanceOf[PrivateKey]
+//          assert(publicKey.isInstanceOf[PublicKey])//todo move to test
+//          assert(privKey.isInstanceOf[PrivateKey])// todo move to test
+      val selector = new X509CertSelector()
+      selector.setSubjectPublicKey(publicKey)
+      val result = selector.`match`(p12.getCertificate("test_cert"))
+//      assert(result)// todo move to test
+//      saveCertAsPem(p12.getCertificate("test_cert"), s"/Users/wyatt/.dag/pub.pem")
+
       (privKey.asInstanceOf[PrivateKey], publicKey)
     }
   }
 
+  def saveCertAsPem(cert: Certificate, outFile: String) = {
+    val fileWriter = new FileWriter(outFile)
+    val pemWriter = new PEMWriter(fileWriter)
+    pemWriter.writeObject(cert.getPublicKey())
+    pemWriter.close()
+  }
+
   def makeWalletKeyStore(
                           password: Array[Char],
-                          saveCertTo: Option[File] = None,
-                          savePairsTo: Option[File] = None,
+                          saveKSTo: Option[File] = None,
+                          savePubCertTo: Option[String] = None,
                           validityInDays: Int = 500000,
                           orgName: String = "test",
                           orgUnitName: String = "test",
@@ -337,7 +356,7 @@ object WalletKeyStore extends App {
                           rsaEntryName: String = "test_rsa",
                           ecdsaEntryNamePrefix: String = "ecdsa",
                           sslKeySize: Int = 4096
-                        ): (KeyStore, KeyStore) = {
+                        ): KeyStore = {
     import java.security.Security
     // Note this requires JDK 8u151 +
     // https://stackoverflow.com/questions/6481627/java-security-illegal-key-size-or-default-parameters
@@ -387,31 +406,39 @@ object WalletKeyStore extends App {
     // ^ in case next step is confusing:
 
     import java.io.FileOutputStream
-    import java.security.KeyStore
-    val bks = KeyStore.getInstance("BKS", "BC")
-    bks.load(null, null)
+//    import java.security.KeyStore
+//    val bks: KeyStore = KeyStore.getInstance("BKS", "BC")
+//    bks.load(null, null)
 
     ks.setCertificateEntry(certEntryName, cert)
     ks.setKeyEntry(rsaEntryName, keyPair.getPrivate, password, Array(cert))
 
-    val ecdsaKeys = Seq.fill(numECDSAKeys){makeKeyPairFrom(provider = getProv)}
+    saveCertAsPem(ks.getCertificate("test_cert"), savePubCertTo.get)
+    ks.store(new FileOutputStream(saveKSTo.get), password)
 
-    ecdsaKeys.zipWithIndex.foreach{
-      case (k, i) =>
-        bks.setCertificateEntry(certEntryName, cert)
-        bks.setKeyEntry(rsaEntryName, keyPair.getPrivate, password, Array(cert))
-        bks.setKeyEntry(s"${ecdsaEntryNamePrefix}_priv_" + i, k.getPrivate, password, Array(cert))
-        bks.setKeyEntry(s"${ecdsaEntryNamePrefix}_pub_" + i, k.getPublic, password, Array(cert))
-    }
-    savePairsTo.foreach { file =>
-      bks.store(new FileOutputStream(file), password)
-    }
+    ks
 
-    saveCertTo.foreach { file =>
-      ks.store(new FileOutputStream(file), password)
-    }
+    //    val ecdsaKeys = Seq.fill(numECDSAKeys){makeKeyPairFrom(provider = getProv)}
 
-    ks -> bks
+//    ecdsaKeys.zipWithIndex.foreach {
+//      case (k, i) =>
+//        bks.setCertificateEntry(certEntryName, cert)
+//        bks.setKeyEntry(rsaEntryName, keyPair.getPrivate, password, Array(cert))
+//        bks.setKeyEntry(s"${ecdsaEntryNamePrefix}_priv_" + i, k.getPrivate, password, Array(cert))
+//        bks.setKeyEntry(s"${ecdsaEntryNamePrefix}_pub_" + i, k.getPublic, password, Array(cert))
+//    }
+//    savePairsTo.foreach { file =>
+//      bks.store(new FileOutputStream(file), password)
+//    }
+//
+//    saveCertTo.foreach { file =>
+//      ks.store(new FileOutputStream(file), password)
+//    }
+
+
+//    saveCertAsPem(ks.getCertificate("test_cert"), s"/Users/wyatt/.dag/pem_test")
+
+//    ks -> bks
   }
 
 //  def apply(args: Array[String]) = {
