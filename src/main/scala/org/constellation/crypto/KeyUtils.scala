@@ -8,6 +8,7 @@ import java.security.{KeyFactory, SecureRandom, _}
 import java.util.{Base64, Date}
 
 import better.files.File
+import com.github.alanverbner.bip39
 import com.google.common.hash.Hashing
 import com.typesafe.scalalogging.StrictLogging
 import org.bouncycastle.jce.provider
@@ -255,8 +256,45 @@ object WalletKeyStore extends App {
   import java.io.File
   import java.security.KeyStore
   import java.io.FileOutputStream
+  import com.github.alanverbner.bip39.{EnglishWordList, Entropy128, WordList}
+  import org.spongycastle.util.encoders.Hex
+
+
 
   val ECDSA = "ECDsA"
+
+  def seedToKeys()= {
+    import com.sun.tools.javac.util.Convert
+    val recoveryPhrase = generateMnemonic
+//      "heavy virus hollow shrug shadow double dwarf affair novel weird image prize frame anxiety wait"
+//    val nxtPrivateKey = Hex.decode("200a8ead018adb6c78f2c821500ad13f5f24d101ed8431adcfb315ca58468553")
+//    val nxtPublicKey = Hex.decode("163c6583ed489414f27e73a74f72080b478a55dfce4a086ded2990976e8bb81e")
+//    val nxtRsAddress = "NXT-CGNQ-8WBM-3P2F-AVH9J"
+//    val nxtAccountId = Convert.parseAccountId(NxtMain.get, "9808271777446836886")
+
+    val recipient = "NXT-RZ9H-H2XD-WTR3-B4WN2"
+//    val recipientPublicKey = Convert.parseHexString("8381e8668479d27316dced97429c2bf7fde9d909cce2c53d565a4078ee82b13a")
+    import org.bitcoinj.crypto.DeterministicHierarchy
+    import org.bitcoinj.crypto.HDKeyDerivation
+    import org.bitcoinj.wallet.DeterministicSeed
+
+    val seed = new DeterministicSeed(recoveryPhrase, null, "", 0)
+    val masterKey = HDKeyDerivation.createMasterPrivateKey(seed.getSeedBytes)
+    val hierarchy = new DeterministicHierarchy(masterKey)
+    import org.bitcoinj.crypto.DeterministicKey
+    import org.bitcoinj.crypto.HDKeyDerivation
+    val rootKey = HDKeyDerivation.createMasterPrivateKey(seed.getSeedBytes)
+    rootKey.setCreationTimeSeconds(seed.getCreationTimeSeconds)
+    rootKey
+  }
+
+  def generateMnemonic = {
+    val engWordLst = WordList.load(EnglishWordList).get
+    val sentence = bip39.generate(Entropy128, WordList.load(EnglishWordList).get, new SecureRandom())
+    println(sentence)
+    assert(bip39.check(sentence, engWordLst))
+    sentence
+  }
 
   def makeKeyPairFrom(provider: Provider): KeyPair = {
     val keyGen: KeyPairGenerator = KeyPairGenerator.getInstance("ECDsA", provider)
