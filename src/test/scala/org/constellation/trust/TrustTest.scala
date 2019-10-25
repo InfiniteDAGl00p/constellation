@@ -1,20 +1,16 @@
 package org.constellation.trust
-import better.files.File
 import org.constellation.trust.SelfAvoidingWalk.runWalk
 import org.scalatest.FlatSpec
-import breeze.stats.distributions._
 
-import scala.annotation.tailrec
-import scala.collection.immutable
 import scala.io.Source
 //import breeze.linalg._
-import breeze.plot._
 import breeze.linalg._
-import breeze.linalg.NumericOps._
-import breeze.linalg.operators._
+import breeze.plot._
+import org.scalatest._
 
 import scala.util.{Random, Try}
 
+@Ignore
 class TrustTest extends FlatSpec {
 
   "Single malicious edge" should "weight good nodes over bad" in {
@@ -276,7 +272,7 @@ class TrustTest extends FlatSpec {
     assert(true)
   }
 
-  "plot" should "plot" in {
+   "plot" should "plot" in {
     val ratioUpperBound = 40
     val numTestRounds = 3
     val domain = DenseVector(getAvgConvergencePerSeedRatio(numTestRounds, ratioUpperBound))
