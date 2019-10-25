@@ -61,6 +61,8 @@ class DAO() extends NodeData with EdgeDAO with SimpleWalletLike with StrictLoggi
   var transactionAcceptedAfterDownload: Long = 0L
   var downloadFinishedTime: Long = System.currentTimeMillis()
 
+  var predictedReputation: Map[Id, Double] = _//todo, add lock
+
   val channelStorage: ChannelStorage = ChannelStorage(this)
 
   def preventLocalhostAsPeer: Boolean = !nodeConfig.allowLocalhostPeers
