@@ -1,6 +1,6 @@
 package org.constellation
 
-import java.io
+import java.{io, util}
 import java.io.{FileInputStream, FileOutputStream, FileReader}
 
 import better.files.File
@@ -17,18 +17,49 @@ import java.io._
 import java.security.cert.Certificate
 import java.security.{KeyStore, PrivateKey, _}
 
+import org.bitcoinj.crypto.MnemonicCode
+import org.bitcoinj.wallet.Wallet
 import org.bouncycastle.asn1.ASN1Object
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
-import org.constellation.GetOrCreateKeys.{aSN1Obj, keyPair}
 //import org.bouncycastle.jce.provider
 import org.constellation.crypto.WalletKeyStore
+import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
+import org.bitcoinj.wallet.{DeterministicKeyChain, DeterministicSeed}
 
 
 class ASN1ObjectInstance(pKI: PrivateKeyInfo) extends ASN1Object {
   def toASN1Primitive = pKI.parsePrivateKey().toASN1Primitive
 
   override def getEncoded(str: String): Array[Byte] = super.getEncoded(str)
+}
+
+object HdKeys extends App {
+  val (mnemonic, password) = args match {
+    case Array(m, pw) => (ListBuffer(m.split("-"): _*).asJava, pw)
+    case Array(pw) => (ListBuffer(List.empty[String]: _*).asJava, pw)
+    case Array() => (ListBuffer(List.empty[String]: _*).asJava, "")
+  }
+//  val seedOpt: Option[java.util.List[String]] = args.headOption.map(words => )
+  val dagDir = System.getProperty("user.home") + "/.dag" //todo dry by putting into own into files
+  val acctDir = dagDir + "/acct"
+  val keyDir = dagDir + "/key"
+  //todo need extra dir to correspond to which mnemonic
+  //if HD pub key dir not = to all first 100, then replace with first 100
+  val loadExistingOrGetNewMnemonic: java.util.List[String] = if (mnemonic.isEmpty) ListBuffer(WalletKeyStore.generateMnemonic.split(" "): _*).asJava else mnemonic
+  val seed = MnemonicCode.toSeed(loadExistingOrGetNewMnemonic, password)
+  val mnemonicSeed = new DeterministicSeed(loadExistingOrGetNewMnemonic, seed, password, 10L)
+//  val (accountChain, accountChainSeed) = WalletKeyStore.seedToKeys(mnemonicSeed)
+//  val accountChainMnemonic = accountChain.getMnemonicCode
+
+  val loadedFromSeed: DeterministicKeyChain = WalletKeyStore.loadFromMnemonic(mnemonicSeed)
+
+
+  println("loadExistingOrGetNewMnemonic:" + loadExistingOrGetNewMnemonic)
+  println("accountChainMnemonic: " + loadedFromSeed.getMnemonicCode)
+  assert(loadExistingOrGetNewMnemonic == loadedFromSeed.getMnemonicCode)
+//  accountChain.checkPassword()
 }
 
 object GetOrCreateKeys

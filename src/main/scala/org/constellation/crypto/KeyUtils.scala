@@ -16,7 +16,7 @@ import org.bitcoinj.core.{NetworkParameters, Sha256Hash}
 import org.bitcoinj.crypto.{ChildNumber, KeyCrypter}
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.script.Script
-import org.bitcoinj.wallet.{DeterministicKeyChain, DeterministicSeed}
+import org.bitcoinj.wallet.{DeterministicKeyChain, DeterministicSeed, Wallet}
 import org.bouncycastle.jce.provider
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.spongycastle.asn1.x500.{X500Name, X500NameBuilder}
@@ -273,43 +273,31 @@ object WalletKeyStore extends App {
   import java.io.FileOutputStream
   import com.github.alanverbner.bip39.{EnglishWordList, Entropy128, WordList}
   import org.spongycastle.util.encoders.Hex
-
-
-
   val ECDSA = "ECDsA"
+  val secs = 1389353062L// todo, make random
 
-  def seedToKeys()= {
-    val recoveryPhrase = generateMnemonic
-//      "heavy virus hollow shrug shadow double dwarf affair novel weird image prize frame anxiety wait"
-//    val nxtPrivateKey = Hex.decode("200a8ead018adb6c78f2c821500ad13f5f24d101ed8431adcfb315ca58468553")
-//    val nxtPublicKey = Hex.decode("163c6583ed489414f27e73a74f72080b478a55dfce4a086ded2990976e8bb81e")
-//    val nxtRsAddress = "NXT-CGNQ-8WBM-3P2F-AVH9J"
-//    val nxtAccountId = Convert.parseAccountId(NxtMain.get, "9808271777446836886")
+//  def getSeed: DeterministicSeed = {
+//    val ENTROPY: Array[Byte] = Sha256Hash.hash("don't use a string seed like this in real life".getBytes())
+//    new DeterministicSeed(ENTROPY, "", secs)
+//  }
 
-    val recipient = "NXT-RZ9H-H2XD-WTR3-B4WN2"
-//    val recipientPublicKey = Convert.parseHexString("8381e8668479d27316dced97429c2bf7fde9d909cce2c53d565a4078ee82b13a")
-    import org.bitcoinj.crypto.DeterministicHierarchy
-    import org.bitcoinj.crypto.HDKeyDerivation
-    import org.bitcoinj.wallet._
-//    import org.bitcoinj.wallet.DeterministicSeed
-    import org.bitcoinj.wallet.KeyChain.KeyPurpose
-    import org.spongycastle.crypto.params.KeyParameter
-//    val aesKey: org.spongycastle.crypto.params.KeyParameter = new KeyParameter()
-    // m/44'/0'/0'/0/4// m/44'/0'/0'/0/4
 
-    import org.bitcoinj.core.Sha256Hash
-    val networkParams = NetworkParameters.ID_MAINNET//todo ensure compatability
-    val EXPECTED_ADDRESS_4: String ="18dxk72otf2amyAsjiKnEWhox5CJGQHYGA" //todo make EXPECTED_ADDRESS for $dag
-    val secs = 1389353062L// random seed
-    val ENTROPY: Array[Byte] = Sha256Hash.hash("don't use a string seed like this in real life".getBytes())
-    val seed = new DeterministicSeed(ENTROPY, "", secs)
+
+  def loadFromMnemonic(seed: DeterministicSeed) = {
+    val params = new MainNetParams//todo, overload to use $dag params
+    val walletBip44: Wallet = Wallet.fromSeed(params, seed, ImmutableList.of(new ChildNumber(44, true), new ChildNumber(0, true), ChildNumber.ZERO_HARDENED, ChildNumber.ZERO))
+    walletBip44.getActiveKeyChain
+  }
+
+  def seedToKeys(seed: DeterministicSeed) = {//todo change to createNew
+
     import com.google.common.collect.ImmutableList
     import org.bitcoinj.crypto.ChildNumber
+    import org.bitcoinj.crypto.HDUtils.formatPath
+
     import org.bitcoinj.crypto.DeterministicHierarchy
     import org.bitcoinj.crypto.HDKeyDerivation
-//    import org.bitcoinj.wallet.DeterministicKeyChain
-    import org.bitcoinj.wallet.DeterministicSeed
-//    val seed = new DeterministicSeed(TREZOR_SEED_PHRASE, null, "", secs)
+
     val privateMasterKey = HDKeyDerivation.createMasterPrivateKey(seed.getSeedBytes)
     println("privateMasterKey = " + privateMasterKey)
 
@@ -326,39 +314,23 @@ object WalletKeyStore extends App {
 
     val key_m_44h_0h_0h_path: ImmutableList[ChildNumber] = key_m_44h_0h_0h.getPath
     println("key_m_44h_0h_0h_path = " + key_m_44h_0h_0h_path)
+    val dummyPath = formatPath(key_m_44h_0h_0h_path)
+    println("dummyPath: " + dummyPath)
+//import com.google.common.collect.ImmutableList
+    import org.bitcoinj.crypto.ChildNumber
+    import org.bitcoinj.wallet.Wallet
 
     // Generate a chain using the derived key i.e. master private key is available
     val accountChainBuilder = DeterministicKeyChain.builder()
-//    accountChainBuilder.passphrase("password")
+//    accountChainBuilder.passphrase("password")//todo, enable if allowed for nano ledger s
     accountChainBuilder.random(new SecureRandom())
     accountChainBuilder.accountPath(key_m_44h_0h_0h_path)
     accountChainBuilder.seed(seed)
 
-      //(seed, null, Script.ScriptType.P2PKH, key_m_44h_0h_0h_path)
-    val accountChain = accountChainBuilder.build()
+    val accountChain: DeterministicKeyChain = accountChainBuilder.build()
     println(accountChain.getMnemonicCode)
     println(accountChain.numKeys())
-
-    //    println("accountChain = " + accountChain)
-//    val testKey = HDKeyDerivation.createMasterPrivateKey(seed2.getSeedBytes)
-//    val bip44chain = new DeterministicKeyChain(testKey, false,
-//      Script.ScriptType.P2PKH,
-//      ImmutableList.of(new ChildNumber(44, true),
-//        new ChildNumber(1, true),
-//        new ChildNumber(0, true))
-//    )
-//
-//
-//    val seed = new DeterministicSeed(recoveryPhrase, null, "", 0)
-//    val params = MainNetParams.get()
-////    val wallet = Wallet.fromSeedeed(params, seed)
-//    val masterKey = HDKeyDerivation.createMasterPrivateKey(seed.getSeedBytes)
-//    val hierarchy = new DeterministicHierarchy(masterKey)
-//    import org.bitcoinj.crypto.DeterministicKey
-//    import org.bitcoinj.crypto.HDKeyDerivation
-//    val rootKey: DeterministicKey = HDKeyDerivation.createMasterPrivateKey(seed.getSeedBytes)
-//    rootKey.setCreationTimeSeconds(seed.getCreationTimeSeconds)
-//    rootKey.getChildNumber()
+    (accountChain, accountChain.getSeed)
   }
 
   def generateMnemonic = {
@@ -474,5 +446,4 @@ object WalletKeyStore extends App {
 
     ks
   }
-  seedToKeys()
 }
