@@ -31,17 +31,15 @@ import org.bitcoinj.wallet.{DeterministicKeyChain, DeterministicSeed}
 
 class ASN1ObjectInstance(pKI: PrivateKeyInfo) extends ASN1Object {
   def toASN1Primitive = pKI.parsePrivateKey().toASN1Primitive
-
   override def getEncoded(str: String): Array[Byte] = super.getEncoded(str)
 }
 
 object HdKeys extends App {
-  val (mnemonic, password) = args match {
+  val (mnemonic, password) = args match {//todo, maybe call password here: "salt"?
     case Array(m, pw) => (ListBuffer(m.split("-"): _*).asJava, pw)
     case Array(pw) => (ListBuffer(List.empty[String]: _*).asJava, pw)
     case Array() => (ListBuffer(List.empty[String]: _*).asJava, "")
   }
-//  val seedOpt: Option[java.util.List[String]] = args.headOption.map(words => )
   val dagDir = System.getProperty("user.home") + "/.dag" //todo dry by putting into own into files
   val acctDir = dagDir + "/acct"
   val keyDir = dagDir + "/key"
@@ -50,16 +48,8 @@ object HdKeys extends App {
   val loadExistingOrGetNewMnemonic: java.util.List[String] = if (mnemonic.isEmpty) ListBuffer(WalletKeyStore.generateMnemonic.split(" "): _*).asJava else mnemonic
   val seed = MnemonicCode.toSeed(loadExistingOrGetNewMnemonic, password)
   val mnemonicSeed = new DeterministicSeed(loadExistingOrGetNewMnemonic, seed, password, 10L)
-//  val (accountChain, accountChainSeed) = WalletKeyStore.seedToKeys(mnemonicSeed)
-//  val accountChainMnemonic = accountChain.getMnemonicCode
-
-  val loadedFromSeed: DeterministicKeyChain = WalletKeyStore.loadFromMnemonic(mnemonicSeed)
-
-
-  println("loadExistingOrGetNewMnemonic:" + loadExistingOrGetNewMnemonic)
-  println("accountChainMnemonic: " + loadedFromSeed.getMnemonicCode)
+  val (loadedFromSeed, accountChainSeed) = WalletKeyStore.seedToKeys(mnemonicSeed)
   assert(loadExistingOrGetNewMnemonic == loadedFromSeed.getMnemonicCode)
-//  accountChain.checkPassword()
 }
 
 object GetOrCreateKeys

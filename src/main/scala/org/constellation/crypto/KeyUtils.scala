@@ -1,6 +1,6 @@
 package org.constellation.crypto
 
-import java.io.{ByteArrayInputStream, FileInputStream, FileWriter}
+import java.io.{ByteArrayInputStream, FileWriter}
 import java.math.BigInteger
 import java.security.cert.{Certificate, CertificateFactory, X509CertSelector}
 import java.security.spec.{ECGenParameterSpec, PKCS8EncodedKeySpec, X509EncodedKeySpec}
@@ -12,15 +12,14 @@ import com.github.alanverbner.bip39
 import com.google.common.collect.ImmutableList
 import com.google.common.hash.Hashing
 import com.typesafe.scalalogging.StrictLogging
-import org.bitcoinj.core.{NetworkParameters, Sha256Hash}
-import org.bitcoinj.crypto.{ChildNumber, KeyCrypter}
+import org.bitcoinj.crypto.{ChildNumber, DeterministicHierarchy, HDKeyDerivation}
+import org.bitcoinj.crypto.HDUtils.formatPath
 import org.bitcoinj.params.MainNetParams
-import org.bitcoinj.script.Script
 import org.bitcoinj.wallet.{DeterministicKeyChain, DeterministicSeed, Wallet}
 import org.bouncycastle.jce.provider
 import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.spongycastle.asn1.x500.{X500Name, X500NameBuilder}
 import org.spongycastle.asn1.x500.style.BCStyle
+import org.spongycastle.asn1.x500.{X500Name, X500NameBuilder}
 import org.spongycastle.asn1.x509.SubjectPublicKeyInfo
 import org.spongycastle.cert.X509v1CertificateBuilder
 import org.spongycastle.openssl.PEMWriter
@@ -268,11 +267,10 @@ object KeyUtils extends StrictLogging {
 //}
 
 object WalletKeyStore extends App {
-  import java.io.File
+  import java.io.{File, FileOutputStream}
   import java.security.KeyStore
-  import java.io.FileOutputStream
+
   import com.github.alanverbner.bip39.{EnglishWordList, Entropy128, WordList}
-  import org.spongycastle.util.encoders.Hex
   val ECDSA = "ECDsA"
   val secs = 1389353062L// todo, make random
 
@@ -283,7 +281,7 @@ object WalletKeyStore extends App {
 
 
 
-  def loadFromMnemonic(seed: DeterministicSeed) = {
+  def loadFromMnemonicDeprecated(seed: DeterministicSeed) = {
     val params = new MainNetParams//todo, overload to use $dag params
     val walletBip44: Wallet = Wallet.fromSeed(params, seed, ImmutableList.of(new ChildNumber(44, true), new ChildNumber(0, true), ChildNumber.ZERO_HARDENED, ChildNumber.ZERO))
     walletBip44.getActiveKeyChain
@@ -291,12 +289,7 @@ object WalletKeyStore extends App {
 
   def seedToKeys(seed: DeterministicSeed) = {//todo change to createNew
 
-    import com.google.common.collect.ImmutableList
-    import org.bitcoinj.crypto.ChildNumber
-    import org.bitcoinj.crypto.HDUtils.formatPath
 
-    import org.bitcoinj.crypto.DeterministicHierarchy
-    import org.bitcoinj.crypto.HDKeyDerivation
 
     val privateMasterKey = HDKeyDerivation.createMasterPrivateKey(seed.getSeedBytes)
     println("privateMasterKey = " + privateMasterKey)
@@ -314,22 +307,14 @@ object WalletKeyStore extends App {
 
     val key_m_44h_0h_0h_path: ImmutableList[ChildNumber] = key_m_44h_0h_0h.getPath
     println("key_m_44h_0h_0h_path = " + key_m_44h_0h_0h_path)
-    val dummyPath = formatPath(key_m_44h_0h_0h_path)
-    println("dummyPath: " + dummyPath)
-//import com.google.common.collect.ImmutableList
-    import org.bitcoinj.crypto.ChildNumber
-    import org.bitcoinj.wallet.Wallet
+    val derivationPath = formatPath(key_m_44h_0h_0h_path)
+    println("derivationPath: " + derivationPath)
 
     // Generate a chain using the derived key i.e. master private key is available
     val accountChainBuilder = DeterministicKeyChain.builder()
-//    accountChainBuilder.passphrase("password")//todo, enable if allowed for nano ledger s
-    accountChainBuilder.random(new SecureRandom())
     accountChainBuilder.accountPath(key_m_44h_0h_0h_path)
     accountChainBuilder.seed(seed)
-
     val accountChain: DeterministicKeyChain = accountChainBuilder.build()
-    println(accountChain.getMnemonicCode)
-    println(accountChain.numKeys())
     (accountChain, accountChain.getSeed)
   }
 
