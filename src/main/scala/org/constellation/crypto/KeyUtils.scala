@@ -257,15 +257,15 @@ object KeyUtils extends StrictLogging {
 
 }
 
-import javax.annotation.Nullable
-class BIP44 extends DeterministicKeyChain{
-  override def DeterministicKeyChain(seed: DeterministicSeed,
-                                     @Nullable crypter: KeyCrypter,
-                                     outputScriptType: Script.ScriptType,
-                                     accountPath: ImmutableList[ChildNumber]) = {
-
-  }
-}
+//import javax.annotation.Nullable
+//class BIP44 extends DeterministicKeyChain{
+//  override def DeterministicKeyChain(seed: DeterministicSeed,
+//                                     @Nullable crypter: KeyCrypter,
+//                                     outputScriptType: Script.ScriptType,
+//                                     accountPath: ImmutableList[ChildNumber]) = {
+//
+//  }
+//}
 
 object WalletKeyStore extends App {
   import java.io.File
@@ -279,7 +279,6 @@ object WalletKeyStore extends App {
   val ECDSA = "ECDsA"
 
   def seedToKeys()= {
-    import com.sun.tools.javac.util.Convert
     val recoveryPhrase = generateMnemonic
 //      "heavy virus hollow shrug shadow double dwarf affair novel weird image prize frame anxiety wait"
 //    val nxtPrivateKey = Hex.decode("200a8ead018adb6c78f2c821500ad13f5f24d101ed8431adcfb315ca58468553")
@@ -322,7 +321,7 @@ object WalletKeyStore extends App {
 
     val deterministicHierarchy = new DeterministicHierarchy(key_m_44h_0h)
 
-    val key_m_44h_0h_0h = deterministicHierarchy.deriveChild(key_m_44h_0h.getPath, false, false, new ChildNumber(0, true))
+    val key_m_44h_0h_0h = deterministicHierarchy.deriveChild(key_m_44h_0h.getPath, false, false, new ChildNumber(66743, true))
     println("key_m_44h_0h_0h = " + key_m_44h_0h_0h)
 
     val key_m_44h_0h_0h_path: ImmutableList[ChildNumber] = key_m_44h_0h_0h.getPath
@@ -330,14 +329,17 @@ object WalletKeyStore extends App {
 
     // Generate a chain using the derived key i.e. master private key is available
     val accountChainBuilder = DeterministicKeyChain.builder()
-    accountChainBuilder.passphrase("password")
+//    accountChainBuilder.passphrase("password")
     accountChainBuilder.random(new SecureRandom())
     accountChainBuilder.accountPath(key_m_44h_0h_0h_path)
     accountChainBuilder.seed(seed)
 
       //(seed, null, Script.ScriptType.P2PKH, key_m_44h_0h_0h_path)
     val accountChain = accountChainBuilder.build()
-//    println("accountChain = " + accountChain)
+    println(accountChain.getMnemonicCode)
+    println(accountChain.numKeys())
+
+    //    println("accountChain = " + accountChain)
 //    val testKey = HDKeyDerivation.createMasterPrivateKey(seed2.getSeedBytes)
 //    val bip44chain = new DeterministicKeyChain(testKey, false,
 //      Script.ScriptType.P2PKH,
