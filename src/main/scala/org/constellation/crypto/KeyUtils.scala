@@ -12,7 +12,7 @@ import com.github.alanverbner.bip39
 import com.google.common.collect.ImmutableList
 import com.google.common.hash.Hashing
 import com.typesafe.scalalogging.StrictLogging
-import org.bitcoinj.crypto.{ChildNumber, DeterministicHierarchy, HDKeyDerivation}
+import org.bitcoinj.crypto.{ChildNumber, DeterministicHierarchy, DeterministicKey, HDKeyDerivation}
 import org.bitcoinj.crypto.HDUtils.formatPath
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.wallet.{DeterministicKeyChain, DeterministicSeed, Wallet}
@@ -279,7 +279,18 @@ object WalletKeyStore extends App {
 //    new DeterministicSeed(ENTROPY, "", secs)
 //  }
 
-
+  def getDagDerivationPath(privateMasterKey: DeterministicKey): ImmutableList[ChildNumber] = {
+    val key_m_44h = HDKeyDerivation.deriveChildKey(privateMasterKey, new ChildNumber(44 | ChildNumber.HARDENED_BIT))
+//    println("key_m_44h deterministic key = " + key_m_44h)
+    val key_m_44h_0h = HDKeyDerivation.deriveChildKey(key_m_44h, ChildNumber.ZERO_HARDENED)
+//    println("key_m_44h_0h deterministic key = " + key_m_44h_0h)
+    val deterministicHierarchy = new DeterministicHierarchy(key_m_44h_0h)
+    val key_m_44h_0h_0h = deterministicHierarchy.deriveChild(key_m_44h_0h.getPath, false, false, new ChildNumber(66743, true))
+//    println("key_m_44h_0h_0h = " + key_m_44h_0h_0h)
+    val key_m_44h_0h_0h_path: ImmutableList[ChildNumber] = key_m_44h_0h_0h.getPath
+    println("key_m_44h_0h_0h_path = " + key_m_44h_0h_0h_path)
+    key_m_44h_0h_0h_path
+  }
 
   def loadFromMnemonicDeprecated(seed: DeterministicSeed) = {
     val params = new MainNetParams//todo, overload to use $dag params
@@ -287,35 +298,18 @@ object WalletKeyStore extends App {
     walletBip44.getActiveKeyChain
   }
 
-  def seedToKeys(seed: DeterministicSeed) = {//todo change to createNew
-
-
-
-    val privateMasterKey = HDKeyDerivation.createMasterPrivateKey(seed.getSeedBytes)
-    println("privateMasterKey = " + privateMasterKey)
-
-    val key_m_44h = HDKeyDerivation.deriveChildKey(privateMasterKey, new ChildNumber(44 | ChildNumber.HARDENED_BIT))
-    println("key_m_44h deterministic key = " + key_m_44h)
-
-    val key_m_44h_0h = HDKeyDerivation.deriveChildKey(key_m_44h, ChildNumber.ZERO_HARDENED)
-    println("key_m_44h_0h deterministic key = " + key_m_44h_0h)
-
-    val deterministicHierarchy = new DeterministicHierarchy(key_m_44h_0h)
-
-    val key_m_44h_0h_0h = deterministicHierarchy.deriveChild(key_m_44h_0h.getPath, false, false, new ChildNumber(66743, true))
-    println("key_m_44h_0h_0h = " + key_m_44h_0h_0h)
-
-    val key_m_44h_0h_0h_path: ImmutableList[ChildNumber] = key_m_44h_0h_0h.getPath
+  def seedToKeys(seed: DeterministicSeed): (DeterministicKeyChain, ImmutableList[ChildNumber]) = {//todo change to createNew
+    val privateMasterKey: DeterministicKey = HDKeyDerivation.createMasterPrivateKey(seed.getSeedBytes)
+    val key_m_44h_0h_0h_path: ImmutableList[ChildNumber] = getDagDerivationPath(privateMasterKey)
     println("key_m_44h_0h_0h_path = " + key_m_44h_0h_0h_path)
-    val derivationPath = formatPath(key_m_44h_0h_0h_path)
+    val derivationPath: String = formatPath(key_m_44h_0h_0h_path)
     println("derivationPath: " + derivationPath)
-
     // Generate a chain using the derived key i.e. master private key is available
     val accountChainBuilder = DeterministicKeyChain.builder()
     accountChainBuilder.accountPath(key_m_44h_0h_0h_path)
     accountChainBuilder.seed(seed)
     val accountChain: DeterministicKeyChain = accountChainBuilder.build()
-    (accountChain, accountChain.getSeed)
+    (accountChain, key_m_44h_0h_0h_path)
   }
 
   def generateMnemonic = {

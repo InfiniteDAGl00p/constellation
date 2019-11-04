@@ -15,9 +15,11 @@ import org.spongycastle.openssl.jcajce.JcePEMDecryptorProviderBuilder
 import org.spongycastle.openssl.jcajce.JcaPEMKeyConverter
 import java.io._
 import java.security.cert.Certificate
+import java.security.spec.PKCS8EncodedKeySpec
 import java.security.{KeyStore, PrivateKey, _}
 
-import org.bitcoinj.crypto.MnemonicCode
+import com.google.common.collect.ImmutableList
+import org.bitcoinj.crypto.{ChildNumber, MnemonicCode}
 import org.bitcoinj.wallet.Wallet
 import org.bouncycastle.asn1.ASN1Object
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo
@@ -34,9 +36,19 @@ class ASN1ObjectInstance(pKI: PrivateKeyInfo) extends ASN1Object {
   override def getEncoded(str: String): Array[Byte] = super.getEncoded(str)
 }
 
-object HdKeys extends App {
-  val (mnemonic, password) = args match {//todo, maybe call password here: "salt"?
-    case Array(m, pw) => (ListBuffer(m.split("-"): _*).asJava, pw)
+object HdKeys extends App {//todo use for HDwallet exe
+  def signWithKeyOfDepth(hDWallet: DeterministicKeyChain, path: ImmutableList[ChildNumber], keyDepth: Int, payload: Array[Byte]) = {
+    assert(keyDepth <= 99)//todo make config for key utils
+    val pathOfDepth = path.asScala.toList :+ new ChildNumber(44 | ChildNumber.HARDENED_BIT)//(new ChildNumber(44 | ChildNumber.HARDENED_BIT))
+    val keyOfDepth = hDWallet.getKeyByPath(pathOfDepth.asJava, true)//new ChildNumber(44 | ChildNumber.HARDENED_BIT)
+    val keyOfDepthBytes = keyOfDepth.getPrivKeyBytes
+    val privKeyOfDepth: PrivateKey = KeyFactory.getInstance("PKCS12", "BC").generatePrivate(new PKCS8EncodedKeySpec(keyOfDepthBytes))
+    val signedPayload: Array[Byte] = signData(payload)(privKeyOfDepth)
+    signedPayload
+  }
+
+  val (mnemonic, passwordSalt) = args match {
+    case Array(m, pw) => (ListBuffer(m.split("-"): _*).asJava, pw)//todo check 12 or 13 provided explicitly?
     case Array(pw) => (ListBuffer(List.empty[String]: _*).asJava, pw)
     case Array() => (ListBuffer(List.empty[String]: _*).asJava, "")
   }
@@ -46,13 +58,13 @@ object HdKeys extends App {
   //todo need extra dir to correspond to which mnemonic
   //if HD pub key dir not = to all first 100, then replace with first 100
   val loadExistingOrGetNewMnemonic: java.util.List[String] = if (mnemonic.isEmpty) ListBuffer(WalletKeyStore.generateMnemonic.split(" "): _*).asJava else mnemonic
-  val seed = MnemonicCode.toSeed(loadExistingOrGetNewMnemonic, password)
-  val mnemonicSeed = new DeterministicSeed(loadExistingOrGetNewMnemonic, seed, password, 10L)
-  val (loadedFromSeed, accountChainSeed) = WalletKeyStore.seedToKeys(mnemonicSeed)
+  val seed = MnemonicCode.toSeed(loadExistingOrGetNewMnemonic, passwordSalt)
+  val mnemonicSeed = new DeterministicSeed(loadExistingOrGetNewMnemonic, seed, passwordSalt, 10L)
+  val (loadedFromSeed: DeterministicKeyChain, dagPath: ImmutableList[ChildNumber]) = WalletKeyStore.seedToKeys(mnemonicSeed)
   assert(loadExistingOrGetNewMnemonic == loadedFromSeed.getMnemonicCode)
 }
 
-object GetOrCreateKeys
+object GetOrCreateKeys//todo use for one key pair exe
   extends App {
 
   def parsePrivPem(path: String): PrivateKey = {
@@ -131,7 +143,7 @@ object SignNewTx extends App {
   }
 
   val src = publicKeyToHex(pubKey)
-  val signature: Array[Byte] = signData(prevTxHash)(privKey)
+  val signature: Array[Byte] = signData(prevTxHash)(privKey)//todo change to payload of prevTxHash and tx content?
   val newTx = createTransaction(
     src,
     newTxData.dst,
