@@ -197,15 +197,13 @@ class SnapshotService[F[_]: Concurrent](
     } yield pulled
 
   def getSnapshotInfoSerialized: F[Option[Array[Byte]]] =
-    getSnapshotInfo
-      .flatTap(info => logger.info(s"${Console.MAGENTA}FoundSnapshotInfo: ${info}${Console.RESET}").pure[F])
-      .flatMap { info =>
-        LiftIO[F].liftIO(
-          info.acceptedCBSinceSnapshot.toList.traverse {
-            dao.checkpointService.fullData(_)
-          }.map(cbs => KryoSerializer.serializeAnyRef(info.copy(acceptedCBSinceSnapshotCache = cbs.flatten)).some)
-        )
-      }
+    getSnapshotInfo.flatMap { info =>
+      LiftIO[F].liftIO(
+        info.acceptedCBSinceSnapshot.toList.traverse {
+          dao.checkpointService.fullData(_)
+        }.map(cbs => KryoSerializer.serializeAnyRef(info.copy(acceptedCBSinceSnapshotCache = cbs.flatten)).some)
+      )
+    }
 
   def updateAcceptedCBSinceSnapshot(cb: CheckpointBlock): F[Unit] =
     acceptedCBSinceSnapshot.get.flatMap { accepted =>
