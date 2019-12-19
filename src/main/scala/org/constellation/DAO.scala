@@ -18,12 +18,7 @@ import org.constellation.domain.blacklist.BlacklistedAddresses
 import org.constellation.domain.configuration.NodeConfig
 import org.constellation.domain.observation.ObservationService
 import org.constellation.domain.p2p.PeerHealthCheck
-import org.constellation.domain.transaction.{
-  TransactionChainService,
-  TransactionGossiping,
-  TransactionService,
-  TransactionValidator
-}
+import org.constellation.domain.transaction.{TransactionChainService, TransactionGossiping, TransactionService, TransactionValidator}
 import org.constellation.genesis.GenesisObservationWriter
 import org.constellation.infrastructure.p2p.PeerHealthCheckWatcher
 import org.constellation.p2p._
@@ -31,6 +26,7 @@ import org.constellation.primitives.Schema.NodeState.NodeState
 import org.constellation.primitives.Schema.NodeType.NodeType
 import org.constellation.primitives.Schema._
 import org.constellation.primitives._
+import org.constellation.rewards.{EigenTrust, RewardsManager}
 import org.constellation.rollback.{RollbackAccountBalances, RollbackLoader, RollbackService}
 import org.constellation.schema.Id
 import org.constellation.snapshot.HeightIdBasedSnapshotSelector
@@ -288,6 +284,9 @@ class DAO() extends NodeData with EdgeDAO with SimpleWalletLike with StrictLoggi
       IO.contextShift(ConstellationExecutionContext.bounded),
       ConstellationExecutionContext.unbounded
     )
+
+    eigenTrust = new EigenTrust[IO](trustManager)
+    rewards = new RewardsManager[IO](eigenTrust, snapshotService, snapshotBroadcastService)
   }
 
   implicit val context: ContextShift[IO] = IO.contextShift(ConstellationExecutionContext.bounded)

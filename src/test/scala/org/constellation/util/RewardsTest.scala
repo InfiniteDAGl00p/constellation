@@ -20,7 +20,7 @@ Note: when Experience outcomes are the same, eigentrust scores stay the same.
 When Opinions stay the same, eigentrust scores change
  */
 class RewardsTest extends FlatSpec {
-  import org.constellation.rewards.Rewards._
+  import org.constellation.rewards.RewardsManager._
 
   import RandomData._
 
