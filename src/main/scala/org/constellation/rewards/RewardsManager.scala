@@ -4,6 +4,7 @@ import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import org.constellation.ConfigUtil
+import org.constellation.checkpoint.CheckpointService
 import org.constellation.consensus.Snapshot
 import org.constellation.domain.observation.Observation
 import org.constellation.p2p.PeerNotification
@@ -12,23 +13,27 @@ import org.constellation.primitives.{ChannelMessage, Transaction}
 import org.constellation.storage.{RecentSnapshot, SnapshotBroadcastService, SnapshotService}
 import org.constellation.trust.TrustEdge
 
-class RewardsManager[F[_]: Concurrent](eigenTrust: EigenTrust[F], snapshotService: SnapshotService[F], snapshotBroadcastService: SnapshotBroadcastService[F]) {
+class RewardsManager[F[_]: Concurrent](
+  eigenTrust: EigenTrust[F],
+  snapshotService: SnapshotService[F],
+  snapshotBroadcastService: SnapshotBroadcastService[F],
+  checkpointService: CheckpointService[F]
+) {
   final val rewards: Ref[F, Map[String, Double]] = Ref.unsafe(Map.empty)
 
-  def updateRewards(): F[Unit] = for {
-    addressTrust <- eigenTrust.getTrustForAddresses
-    addresses = addressTrust.keySet.toList
-    distribution = RewardsManager.rewardDistribution(addresses, addressTrust)
-    _ <- rewards.modify(_ => (distribution, distribution))
-  } yield ()
-
-  def updateForSnapshot(snaopshot: Snapshot): F[Unit] = {
-    val observations = Seq[Observation]() // TODO: Convert Snapshot to Observations
+  def updateRewards(snapshot: Snapshot): F[Unit] =
     for {
+      observations <- snapshot.checkpointBlocks.toList
+        .traverse(checkpointService.fullData)
+        .map(_.flatten.flatMap(_.checkpointBlock.observations))
+
       _ <- eigenTrust.retrain(observations)
-      _ <- updateRewards()
+      addressTrust <- eigenTrust.getTrustForAddresses
+
+      addresses = addressTrust.keySet.toList
+      distribution = RewardsManager.rewardDistribution(addresses, addressTrust)
+      _ <- rewards.modify(_ => (distribution, distribution))
     } yield ()
-  }
 }
 
 object RewardsManager {
