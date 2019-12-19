@@ -111,7 +111,7 @@ class EigenTrust[F[_]: Concurrent](
   def retrain(observations: Seq[Observation]): F[Unit] = {
     val observationData = observations.map(_.signedObservationData.data)
     for {
-      agents <- getAgents
+      agents <- getAgents()
       experiences = convertToExperiences(observationData, agents).asJava
       _ <- Concurrent[F].delay {
         eigenTrust.processExperiences(experiences)
@@ -160,7 +160,7 @@ class EigenTrust[F[_]: Concurrent](
       .mapValues(_.toDouble)
 
   def getTrustForAddresses: F[Map[String, Double]] =
-    agents.get.map { a =>
+    getAgents().map { a =>
       getTrust.map { case (int, trust) => (a.getUnsafe(int).address, trust) }
     }
 
