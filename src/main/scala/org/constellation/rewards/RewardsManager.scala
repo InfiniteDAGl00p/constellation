@@ -1,14 +1,37 @@
 package org.constellation.rewards
 
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.implicits._
+import org.constellation.ConfigUtil
+import org.constellation.consensus.Snapshot
+import org.constellation.domain.observation.Observation
 import org.constellation.p2p.PeerNotification
 import org.constellation.primitives.Schema.CheckpointEdge
 import org.constellation.primitives.{ChannelMessage, Transaction}
-import org.constellation.storage.{RecentSnapshot, SnapshotBroadcastService}
+import org.constellation.storage.{RecentSnapshot, SnapshotBroadcastService, SnapshotService}
 import org.constellation.trust.TrustEdge
 
-object Rewards {
+class RewardsManager[F[_]: Concurrent](eigenTrust: EigenTrust[F], snapshotService: SnapshotService[F], snapshotBroadcastService: SnapshotBroadcastService[F]) {
+  final val rewards: Ref[F, Map[String, Double]] = Ref.unsafe(Map.empty)
+
+  def updateRewards(): F[Unit] = for {
+    addressTrust <- eigenTrust.getTrustForAddresses
+    addresses = addressTrust.keySet.toList
+    distribution = RewardsManager.rewardDistribution(addresses, addressTrust)
+    _ <- rewards.modify(_ => (distribution, distribution))
+  } yield ()
+
+  def updateForSnapshot(snaopshot: Snapshot): F[Unit] = {
+    val observations = Seq[Observation]() // TODO: Convert Snapshot to Observations
+    for {
+      _ <- eigenTrust.retrain(observations)
+      _ <- updateRewards()
+    } yield ()
+  }
+}
+
+object RewardsManager {
   val roundingError = 0.000000000001
 
   /*
@@ -73,9 +96,13 @@ object Rewards {
     }
   }
 
-  def weightContributions(contributions: Map[String, Double], trustEntropyMap: Map[String, Double]): Map[String, Double] = {
+  def weightContributions(
+    contributions: Map[String, Double],
+    trustEntropyMap: Map[String, Double]
+  ): Map[String, Double] = {
     val weightedEntropy = contributions.transform {
-      case (address, partitionSize) => partitionSize * (1 - trustEntropyMap(address)) // Normalize wrt total partition space
+      case (address, partitionSize) =>
+        partitionSize * (1 - trustEntropyMap(address)) // Normalize wrt total partition space
     }
     val totalEntropy = weightedEntropy.values.sum
     weightedEntropy.mapValues(_ / totalEntropy) // Scale by entropy magnitude
@@ -84,11 +111,16 @@ object Rewards {
   def rewardDistribution(addresses: Seq[String], trustEntropyMap: Map[String, Double]): Map[String, Double] = {
     val totalSpace = addresses.size
     val contribution = 1.0 / totalSpace
-    val contributions = addresses.map { address => address -> contribution }.toMap
+    val contributions = addresses.map { address =>
+      address -> contribution
+    }.toMap
     weightContributions(contributions, trustEntropyMap)
   }
 
-  def rewardDistribution(partitonChart: Map[String, Set[String]], trustEntropyMap: Map[String, Double]): Map[String, Double] = {
+  def rewardDistribution(
+    partitonChart: Map[String, Set[String]],
+    trustEntropyMap: Map[String, Double]
+  ): Map[String, Double] = {
     val totalSpace = partitonChart.values.map(_.size).max
     val contributions = partitonChart.mapValues(partiton => (partiton.size / totalSpace).toDouble)
     weightContributions(contributions, trustEntropyMap)

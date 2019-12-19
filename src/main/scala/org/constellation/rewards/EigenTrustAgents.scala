@@ -34,13 +34,19 @@ case class EigenTrustAgents(private val agentMappings: BiDirectionalMap[Id, Int]
       case (idToInd: Map[Id, Int], _) => idToInd.get(id)
     }
 
+  def getUnsafe(id: Id): Int = get(id).get
+  def getUnsafe(agent: Int): Id = get(agent).get
+
   def contains(agent: Int): Boolean = get(agent).isDefined
   def contains(id: Id): Boolean = get(id).isDefined
 
+  def clear(): EigenTrustAgents = EigenTrustAgents.empty
+
   private def update(key: Id, value: Int): BiDirectionalMap[Id, Int] = {
     agentMappings match {
-      case (idToInt: Map[Id, Int], intToId: Map[Int, Id]) =>
+      case (idToInt: Map[Id, Int], intToId: Map[Int, Id]) if !contains(key) && !contains(value) =>
         (idToInt + (key -> value), intToId + (value -> key))
+      case _ => agentMappings
     }
   }
 

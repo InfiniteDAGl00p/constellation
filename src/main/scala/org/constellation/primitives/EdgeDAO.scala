@@ -4,12 +4,7 @@ import java.util.concurrent.Semaphore
 
 import cats.effect.{ContextShift, IO}
 import com.typesafe.scalalogging.StrictLogging
-import org.constellation.checkpoint.{
-  CheckpointAcceptanceService,
-  CheckpointBlockValidator,
-  CheckpointParentService,
-  CheckpointService
-}
+import org.constellation.checkpoint.{CheckpointAcceptanceService, CheckpointBlockValidator, CheckpointParentService, CheckpointService}
 import org.constellation.consensus._
 import org.constellation.domain.blacklist.BlacklistedAddresses
 import org.constellation.domain.configuration.NodeConfig
@@ -17,14 +12,10 @@ import org.constellation.domain.observation.ObservationService
 import org.constellation.domain.p2p.PeerHealthCheck
 import org.constellation.p2p.Cluster
 import org.constellation.primitives.Schema._
-import org.constellation.domain.transaction.{
-  TransactionChainService,
-  TransactionGossiping,
-  TransactionService,
-  TransactionValidator
-}
+import org.constellation.domain.transaction.{TransactionChainService, TransactionGossiping, TransactionService, TransactionValidator}
 import org.constellation.genesis.GenesisObservationWriter
 import org.constellation.infrastructure.p2p.PeerHealthCheckWatcher
+import org.constellation.rewards.{EigenTrust, RewardsManager}
 import org.constellation.rollback.RollbackService
 import org.constellation.schema.Id
 import org.constellation.storage._
@@ -187,6 +178,8 @@ trait EdgeDAO {
   var consensusWatcher: ConsensusWatcher = _
   var consensusScheduler: ConsensusScheduler = _
   var trustDataPollingScheduler: TrustDataPollingScheduler = _
+  var eigenTrust: EigenTrust[IO] = _
+  var rewards: RewardsManager[IO] = _
 
   val notificationService = new NotificationService[IO]()
   val channelService = new ChannelService[IO]()
