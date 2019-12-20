@@ -20,10 +20,10 @@ object EigenTrustAgents {
 case class EigenTrustAgents(private val agentMappings: BiDirectionalMap[Id, Int] = (Map.empty[Id, Int], Map.empty[Int, Id])) {
   private val secureRandom = SecureRandom.getInstanceStrong
 
-  def registerAgent(id: Id): EigenTrustAgents = EigenTrustAgents(update(id, secureRandom.nextInt))
+  def registerAgent(id: Id): EigenTrustAgents = this.copy(update(id, secureRandom.nextInt))
 
-  def unregisterAgent(agent: Int): EigenTrustAgents = EigenTrustAgents(remove(agent))
-  def unregisterAgent(agent: Id): EigenTrustAgents = EigenTrustAgents(remove(agent))
+  def unregisterAgent(agent: Int): EigenTrustAgents = this.copy(remove(agent))
+  def unregisterAgent(agent: Id): EigenTrustAgents = this.copy(remove(agent))
 
   def get(agent: Int): Option[Id] =
     agentMappings match {

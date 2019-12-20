@@ -3,37 +3,66 @@ package org.constellation.rewards
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import org.constellation.ConfigUtil
 import org.constellation.checkpoint.CheckpointService
 import org.constellation.consensus.Snapshot
 import org.constellation.domain.observation.Observation
 import org.constellation.p2p.PeerNotification
-import org.constellation.primitives.Schema.CheckpointEdge
+import org.constellation.primitives.Schema.{AddressCacheData, CheckpointEdge}
 import org.constellation.primitives.{ChannelMessage, Transaction}
-import org.constellation.storage.{RecentSnapshot, SnapshotBroadcastService, SnapshotService}
+import org.constellation.rewards.RewardsManager.rewardDuringEpoch
+import org.constellation.storage.AddressService
 import org.constellation.trust.TrustEdge
 
 class RewardsManager[F[_]: Concurrent](
   eigenTrust: EigenTrust[F],
-  snapshotService: SnapshotService[F],
-  snapshotBroadcastService: SnapshotBroadcastService[F],
-  checkpointService: CheckpointService[F]
+  checkpointService: CheckpointService[F],
+  addressService: AddressService[F]
 ) {
   final val rewards: Ref[F, Map[String, Double]] = Ref.unsafe(Map.empty)
 
-  def updateRewards(snapshot: Snapshot): F[Unit] =
+  def updateBySnapshot(snapshot: Snapshot, snapshotNum: Int): F[Unit] =
     for {
-      observations <- snapshot.checkpointBlocks.toList
-        .traverse(checkpointService.fullData)
-        .map(_.flatten.flatMap(_.checkpointBlock.observations))
-
+      observations <- observationsFromSnapshot(snapshot)
       _ <- eigenTrust.retrain(observations)
-      addressTrust <- eigenTrust.getTrustForAddresses
 
-      addresses = addressTrust.keySet.toList
-      distribution = RewardsManager.rewardDistribution(addresses, addressTrust)
-      _ <- rewards.modify(_ => (distribution, distribution))
+      hashesTrustMap <- eigenTrust.getTrustForAddressHashes
+
+      distribution = RewardsManager
+        .rewardDistribution(hashesTrustMap.keys.toSeq, hashesTrustMap)
+        .mapValues(_ * rewardDuringEpoch(snapshotNum))
+
+      _ <- updateRewards(distribution)
+      _ <- updateAddressBalances(distribution)
     } yield ()
+
+  private def observationsFromSnapshot(snapshot: Snapshot): F[Seq[Observation]] =
+    snapshot.checkpointBlocks.toList
+      .traverse(checkpointService.fullData)
+      .map(_.flatten.flatMap(_.checkpointBlock.observations))
+
+  private def updateRewards(distribution: Map[String, Double]): F[Unit] =
+    rewards.modify(prevDistribution => (prevDistribution |+| distribution, ()))
+
+  /*
+    TODO: Not sure if it is the correct way of updating balances by rewards.
+    1. putUnsafe takes Account.hash but we pass there Id.address which could differ. Maybe we should do Address(id.address).hash.
+    2. I take the current balance and just copy the balance by adding rewards. Seems to be quite... dirty and unsafe?
+   */
+  private def updateAddressBalances(rewards: Map[String, Double]): F[Unit] =
+    rewards.transform {
+      case (address, reward) =>
+        addressService.lookup(address).flatMap { existingCacheData =>
+          val updatedAddressCacheData = existingCacheData.map(
+            cache =>
+              cache.copy(
+                balance = cache.balance + reward.toLong,
+                memPoolBalance = cache.memPoolBalance + reward.toLong
+              )
+          ).getOrElse(AddressCacheData(reward.toLong, reward.toLong))
+
+          addressService.putUnsafe(address, updatedAddressCacheData)
+        }
+    }.values.toList.sequence.void
 }
 
 object RewardsManager {

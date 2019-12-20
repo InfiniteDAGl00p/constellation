@@ -159,7 +159,7 @@ class EigenTrust[F[_]: Concurrent](
       .toMap
       .mapValues(_.toDouble)
 
-  def getTrustForAddresses: F[Map[String, Double]] =
+  def getTrustForAddressHashes: F[Map[String, Double]] =
     getAgents().map { a =>
       getTrust.map { case (int, trust) => (a.getUnsafe(int).address, trust) }
     }
