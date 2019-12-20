@@ -10,20 +10,23 @@ import org.constellation.p2p.PeerNotification
 import org.constellation.primitives.Schema.{AddressCacheData, CheckpointEdge}
 import org.constellation.primitives.{ChannelMessage, Transaction}
 import org.constellation.rewards.RewardsManager.rewardDuringEpoch
-import org.constellation.storage.AddressService
+import org.constellation.storage.{AddressService, SnapshotBroadcastService}
 import org.constellation.trust.TrustEdge
 
 class RewardsManager[F[_]: Concurrent](
   eigenTrust: EigenTrust[F],
   checkpointService: CheckpointService[F],
-  addressService: AddressService[F]
+  addressService: AddressService[F],
+  snapshotBroadcastService: SnapshotBroadcastService[F],
 ) {
   final val rewards: Ref[F, Map[String, Double]] = Ref.unsafe(Map.empty)
 
-  def updateBySnapshot(snapshot: Snapshot, snapshotNum: Int): F[Unit] =
+  def updateBySnapshot(snapshot: Snapshot): F[Unit] =
     for {
       observations <- observationsFromSnapshot(snapshot)
       _ <- eigenTrust.retrain(observations)
+
+      snapshotNum <- getSnapshotNumber
 
       hashesTrustMap <- eigenTrust.getTrustForAddressHashes
 
@@ -34,6 +37,11 @@ class RewardsManager[F[_]: Concurrent](
       _ <- updateRewards(distribution)
       _ <- updateAddressBalances(distribution)
     } yield ()
+
+  // TODO: Check if this is the correct way of checking the snapshot number
+  // Assumption that `getRecentSnapshots` returns all snapshots may be failure
+  private def getSnapshotNumber: F[Int] =
+    snapshotBroadcastService.getRecentSnapshots.map(_.size)
 
   private def observationsFromSnapshot(snapshot: Snapshot): F[Seq[Observation]] =
     snapshot.checkpointBlocks.toList
