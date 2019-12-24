@@ -27,13 +27,16 @@ class RewardsManager[F[_]: Concurrent](
       _ <- eigenTrust.retrain(observations)
       trustMap <- eigenTrust.getTrustForAddressHashes
 
-      weightContributions = weightByTrust(trustMap) _ >>> weightByEpoch(snapshotHeight)
+      weightContributions = weightByTrust(trustMap) _ >>> weightByEpoch(snapshotHeight) >>> weightByStardust
       contributions = calculateContributions(trustMap.keySet.toSeq)
       distribution = weightContributions(contributions)
 
       _ <- updateRewards(distribution)
       _ <- updateAddressBalances(distribution)
     } yield ()
+
+  def weightByStardust: Map[String, Double] => Map[String, Double] =
+    StardustCollective.weightByStardust
 
   def weightByEpoch(snapshotHeight: Int)(contributions: Map[String, Double]): Map[String, Double] =
     contributions.mapValues(_ * rewardDuringEpoch(snapshotHeight))
@@ -174,9 +177,7 @@ object RewardsManager {
   }
 
   // TODO: Move to RewardsManager
-  def weightContributions(
-    trustEntropyMap: Map[String, Double]
-  )(contributions: Map[String, Double]): Map[String, Double] = {
+  def weightContributions(trustEntropyMap: Map[String, Double])(contributions: Map[String, Double]): Map[String, Double] = {
     val weightedEntropy = contributions.transform {
       case (address, partitionSize) =>
         partitionSize * (1 - trustEntropyMap(address)) // Normalize wrt total partition space
