@@ -18,6 +18,7 @@ import org.constellation.domain.transaction.TransactionService
 import org.constellation.p2p.{Cluster, DataResolver}
 import org.constellation.primitives.Schema.CheckpointCache
 import org.constellation.primitives._
+import org.constellation.rewards.RewardsManager
 import org.constellation.schema.Id
 import org.constellation.serializer.KryoSerializer
 import org.constellation.trust.TrustManager
@@ -35,6 +36,7 @@ class SnapshotService[F[_]: Concurrent](
   consensusManager: ConsensusManager[F],
   trustManager: TrustManager[F],
   soeService: SOEService[F],
+  rewardsManager: RewardsManager[F],
   dao: DAO
 )(implicit C: ContextShift[F]) {
 
@@ -395,6 +397,8 @@ class SnapshotService[F[_]: Concurrent](
       _ <- checkpointService.applySnapshot(currentSnapshot.checkpointBlocks.toList)
       _ <- dao.metrics.updateMetricAsync(Metrics.lastSnapshotHash, currentSnapshot.hash)
       _ <- dao.metrics.incrementMetricAsync(Metrics.snapshotCount)
+
+      _ <- rewardsManager.attemptReward(currentSnapshot)
     } yield ()
 
     applyAfter.attemptT
@@ -497,6 +501,7 @@ object SnapshotService {
     consensusManager: ConsensusManager[F],
     trustManager: TrustManager[F],
     soeService: SOEService[F],
+    rewardsManager: RewardsManager[F],
     dao: DAO
   )(implicit C: ContextShift[F]) =
     new SnapshotService[F](
@@ -510,6 +515,7 @@ object SnapshotService {
       consensusManager,
       trustManager,
       soeService,
+      rewardsManager,
       dao
     )
 }
