@@ -52,7 +52,6 @@ class SnapshotService[F[_]: Concurrent](
   val lastSnapshotHeight: Ref[F, Int] = Ref.unsafe(0)
   val snapshotHeightInterval: Int = ConfigUtil.constellation.getInt("snapshot.snapshotHeightInterval")
   val snapshotHeightDelayInterval: Int = ConfigUtil.constellation.getInt("snapshot.snapshotHeightDelayInterval")
-  val snapshotHeightRedownloadDelayInterval: Int = ConfigUtil.constellation.getInt("snapshot.snapshotHeightRedownloadDelayInterval")
 
   def exists(hash: String): F[Boolean] =
     for {
@@ -92,6 +91,8 @@ class SnapshotService[F[_]: Concurrent](
       _ <- EitherT.liftF(snapshot.set(nextSnapshot))
 
       _ <- EitherT.liftF(removeLeavingPeers())
+
+      _ <- EitherT.liftF(rewardsManager.attemptReward(nextSnapshot, nextHeightInterval))
 
       created <- EitherT.liftF(
         trustManager.getPredictedReputation.map(
@@ -397,8 +398,6 @@ class SnapshotService[F[_]: Concurrent](
       _ <- checkpointService.applySnapshot(currentSnapshot.checkpointBlocks.toList)
       _ <- dao.metrics.updateMetricAsync(Metrics.lastSnapshotHash, currentSnapshot.hash)
       _ <- dao.metrics.incrementMetricAsync(Metrics.snapshotCount)
-
-      _ <- rewardsManager.attemptReward(currentSnapshot)
     } yield ()
 
     applyAfter.attemptT

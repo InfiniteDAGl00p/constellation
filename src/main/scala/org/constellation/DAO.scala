@@ -200,6 +200,13 @@ class DAO() extends NodeData with EdgeDAO with SimpleWalletLike with StrictLoggi
 
     snapshotWatcher = new SnapshotWatcher(snapshotBroadcastService)
 
+    eigenTrust = new EigenTrust[IO](trustManager)
+    rewardsManager = new RewardsManager[IO](
+      eigenTrust = eigenTrust,
+      checkpointService = checkpointService,
+      addressService = addressService,
+    )
+
     snapshotService = SnapshotService[IO](
       concurrentTipService,
       addressService,
@@ -285,9 +292,6 @@ class DAO() extends NodeData with EdgeDAO with SimpleWalletLike with StrictLoggi
       IO.contextShift(ConstellationExecutionContext.bounded),
       ConstellationExecutionContext.unbounded
     )
-
-    eigenTrust = new EigenTrust[IO](trustManager)
-    rewardsManager = new RewardsManager[IO](eigenTrust, checkpointService, addressService, snapshotBroadcastService)
   }
 
   implicit val context: ContextShift[IO] = IO.contextShift(ConstellationExecutionContext.bounded)
