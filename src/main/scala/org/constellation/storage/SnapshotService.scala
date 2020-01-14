@@ -3,9 +3,10 @@ package org.constellation.storage
 import java.io.FileOutputStream
 import java.nio.file.Path
 
+import cats.Parallel
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, LiftIO, Resource, Sync}
+import cats.effect.{Concurrent, ContextShift, LiftIO, Resource, Sync, _}
 import cats.implicits._
 import io.chrisdavenport.log4cats.SelfAwareStructuredLogger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
@@ -33,7 +34,7 @@ class SnapshotService[F[_]: Concurrent](
   trustManager: TrustManager[F],
   soeService: SOEService[F],
   dao: DAO
-)(implicit C: ContextShift[F]) {
+)(implicit C: ContextShift[F], P: Parallel[F]) {
 
   val logger: SelfAwareStructuredLogger[F] = Slf4jLogger.getLogger[F]
 
@@ -94,12 +95,12 @@ class SnapshotService[F[_]: Concurrent](
               nextSnapshot.lastSnapshot,
               nextHeightInterval - snapshotHeightInterval,
               predictedReputation
-            )
+          )
         )
       )
     } yield created
 
-  def writeSnapshotInfoSerPart(path: String, part: Array[Byte]) = {
+  def writeSnapshotInfoSerPart(path: String, part: Array[Byte]) =
     Resource
       .fromAutoCloseable(Sync[F].delay(new FileOutputStream(path)))
       .use(
@@ -108,27 +109,24 @@ class SnapshotService[F[_]: Concurrent](
             stream.write(part)
           }.flatTap { _ =>
             logger.debug(s"SnapshotInfo part written for path: $path")
-          }
+        }
       )
-  }
 
   def getCCParams(cc: Product) = {
     val values = cc.productIterator
-    cc.getClass.getDeclaredFields.map( _.getName -> values.next ).toList
+    cc.getClass.getDeclaredFields.map(_.getName -> values.next).toList
   }
-
-  import cats.effect._
-  import cats.implicits._
 
   def writeSnapshotInfoPartsToDisk(info: SnapshotInfo, basePath: String = dao.snapshotInfoPath.pathAsString) = {
     val infoSer = info.toSnapshotInfoSer()
     val infoSerParts = getCCParams(infoSer).asInstanceOf[List[(String, Array[Array[Byte]])]]
-    val plan = infoSerParts.flatMap { case (k, parts) =>
-      parts.zipWithIndex.map{
-        case (part, idx) => (s"$basePath-$k-$idx", part)
-      }
+    val plan = infoSerParts.flatMap {
+      case (k, parts) =>
+        parts.zipWithIndex.map {
+          case (part, idx) => (s"$basePath-$k-$idx", part)
+        }
     }
-    plan.traverse { case (path, part) => writeSnapshotInfoSerPart(path, part)} // todo use parTraverse here
+    plan.parTraverse { case (path, part) => writeSnapshotInfoSerPart(path, part) } // todo use parTraverse here
   }
 
   def writeSnapshotInfoToDisk: EitherT[F, SnapshotInfoIOError, Unit] =
@@ -137,7 +135,7 @@ class SnapshotService[F[_]: Concurrent](
         if (info.snapshot == Snapshot.snapshotZero) Sync[F].unit
         else {
           for {
-          _ <- writeSnapshotInfoPartsToDisk(info)
+            _ <- writeSnapshotInfoPartsToDisk(info)
           } yield ()
         }
       }
@@ -529,7 +527,7 @@ object SnapshotService {
     trustManager: TrustManager[F],
     soeService: SOEService[F],
     dao: DAO
-  )(implicit C: ContextShift[F]) =
+  )(implicit C: ContextShift[F], P: Parallel[F]) =
     new SnapshotService[F](
       concurrentTipService,
       addressService,
