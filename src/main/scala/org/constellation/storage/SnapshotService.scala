@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, IO, LiftIO, Resource, Sync}
+import cats.effect.{Concurrent, ContextShift, LiftIO, Resource, Sync}
 import cats.implicits._
 import io.chrisdavenport.log4cats.SelfAwareStructuredLogger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
@@ -14,10 +14,9 @@ import org.constellation.consensus._
 import org.constellation.domain.observation.ObservationService
 import org.constellation.domain.transaction.TransactionService
 import org.constellation.p2p.{Cluster, DataResolver}
-import org.constellation.primitives.Schema.{CheckpointCache, CheckpointCacheMetadata}
+import org.constellation.primitives.Schema.CheckpointCache
 import org.constellation.primitives._
 import org.constellation.schema.Id
-import org.constellation.serializer.KryoSerializer
 import org.constellation.trust.TrustManager
 import org.constellation.util.Metrics
 import org.constellation.{ConfigUtil, ConstellationExecutionContext, DAO}
@@ -100,22 +99,46 @@ class SnapshotService[F[_]: Concurrent](
       )
     } yield created
 
+  def writeSnapshotInfoSerPart(path: String, part: Array[Byte]) = {
+    Resource
+      .fromAutoCloseable(Sync[F].delay(new FileOutputStream(path)))
+      .use(
+        stream =>
+          Sync[F].delay {
+            stream.write(part)
+          }.flatTap { _ =>
+            logger.debug(s"SnapshotInfo part written for path: $path")
+          }
+      )
+  }
+
+  def getCCParams(cc: Product) = {
+    val values = cc.productIterator
+    cc.getClass.getDeclaredFields.map( _.getName -> values.next ).toList
+  }
+
+  import cats.effect._
+  import cats.implicits._
+
+  def writeSnapshotInfoPartsToDisk(info: SnapshotInfo, basePath: String = dao.snapshotInfoPath.pathAsString) = {
+    val infoSer = info.toSnapshotInfoSer()
+    val infoSerParts = getCCParams(infoSer).asInstanceOf[List[(String, Array[Array[Byte]])]]
+    val plan = infoSerParts.flatMap { case (k, parts) =>
+      parts.zipWithIndex.map{
+        case (part, idx) => (s"$basePath-$k-$idx", part)
+      }
+    }
+    plan.traverse { case (path, part) => writeSnapshotInfoSerPart(path, part)} // todo use parTraverse here
+  }
+
   def writeSnapshotInfoToDisk: EitherT[F, SnapshotInfoIOError, Unit] =
     EitherT.liftF {
       getSnapshotInfoWithFullData.flatMap { info =>
         if (info.snapshot == Snapshot.snapshotZero) Sync[F].unit
         else {
-          val path = dao.snapshotInfoPath.pathAsString
-          Resource
-            .fromAutoCloseable(Sync[F].delay(new FileOutputStream(path)))
-            .use(
-              stream =>
-                Sync[F].delay {
-                  stream.write(KryoSerializer.serializeAnyRef(info))//todo break up info.toSnapshotInfoSer and save in part-files
-                }.flatTap { _ =>
-                  logger.debug(s"SnapshotInfo written for hash: ${info.snapshot.hash} in path: ${path}")
-                }
-            )
+          for {
+          _ <- writeSnapshotInfoPartsToDisk(info)
+          } yield ()
         }
       }
     }.leftMap(SnapshotInfoIOError)

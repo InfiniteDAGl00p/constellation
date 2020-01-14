@@ -217,7 +217,7 @@ object EdgeProcessor extends StrictLogging {
       "handleSignatureRequest"
     )(ConstellationExecutionContext.bounded, dao)
 
-  def chunkSerialize[T](chunk: Array[T], tag: String) = {
+  def chunkSerialize[T](chunk: Seq[T], tag: String) = {
     logger.warn(s"chunkSerialize ${tag}")
     KryoSerializer.serializeAnyRef(chunk)
   }
@@ -244,44 +244,44 @@ case class SnapshotInfo(
   ) {
     import EdgeProcessor.chunkSerialize
 
-    def toSnapshotInfoSer(info: SnapshotInfo, chunkSize: Int = 100) = //todo make chunk size config
+    def toSnapshotInfoSer(info: SnapshotInfo = this, chunkSize: Int = 100) = //todo make chunk size config
       SnapshotInfoSer(
-        KryoSerializer.serialize[String](info.snapshot.lastSnapshot),
+        Array(KryoSerializer.serialize[String](info.snapshot.lastSnapshot)),
         info.snapshot.checkpointBlocks
           .grouped(chunkSize)
-          .map(t => chunkSerialize(t.toArray, "acceptedCBSinceSnapshot"))
+          .map(t => chunkSerialize(t, "acceptedCBSinceSnapshot"))
           .toArray,
         info.acceptedCBSinceSnapshot
           .grouped(chunkSize)
-          .map(t => chunkSerialize(t.toArray, "acceptedCBSinceSnapshot"))
+          .map(t => chunkSerialize(t, "acceptedCBSinceSnapshot"))
           .toArray,
         info.acceptedCBSinceSnapshotCache
           .grouped(chunkSize)
-          .map(t => chunkSerialize(t.toArray, "acceptedCBSinceSnapshotCache"))
+          .map(t => chunkSerialize(t, "acceptedCBSinceSnapshotCache"))
           .toArray,
-        KryoSerializer.serialize[Int](info.lastSnapshotHeight),
-        info.snapshotHashes.grouped(chunkSize).map(t => chunkSerialize(t.toArray, "snapshotHashes")).toArray,
+        Array(KryoSerializer.serialize[Int](info.lastSnapshotHeight)),
+        info.snapshotHashes.grouped(chunkSize).map(t => chunkSerialize(t, "snapshotHashes")).toArray,
         info.addressCacheData.toSeq
           .grouped(chunkSize)
-          .map(partitionMap => chunkSerialize(partitionMap.toArray, "addressCacheData"))
+          .map(partitionMap => chunkSerialize(partitionMap, "addressCacheData"))
           .toArray,
         info.tips
           .grouped(chunkSize)
-          .map(partitionMap => chunkSerialize(partitionMap.toArray, "acceptedCBSinceSnapshot"))
+          .map(partitionMap => chunkSerialize(partitionMap.toSeq, "acceptedCBSinceSnapshot"))
           .toArray,
-        info.snapshotCache.grouped(chunkSize).map(t => chunkSerialize(t.toArray, "snapshotCache")).toArray,
+        info.snapshotCache.grouped(chunkSize).map(t => chunkSerialize(t, "snapshotCache")).toArray,
         info.lastAcceptedTransactionRef
           .grouped(chunkSize)
-          .map(partitionMap => chunkSerialize(partitionMap.toArray, "lastAcceptedTransactionRef"))
+          .map(partitionMap => chunkSerialize(partitionMap.toSeq, "lastAcceptedTransactionRef"))
           .toArray
       )
   }
 
-case class SnapshotInfoSer(snapshot: Array[Byte],
+case class SnapshotInfoSer(snapshot: Array[Array[Byte]],
                              snapshotCheckpointBlocks: Array[Array[Byte]],
                              acceptedCBSinceSnapshot: Array[Array[Byte]],
                              acceptedCBSinceSnapshotCache: Array[Array[Byte]],
-                             lastSnapshotHeight: Array[Byte],
+                             lastSnapshotHeight: Array[Array[Byte]],
                              snapshotHashes: Array[Array[Byte]],
                              addressCacheData: Array[Array[Byte]],
                              tips: Array[Array[Byte]],
@@ -290,23 +290,23 @@ case class SnapshotInfoSer(snapshot: Array[Byte],
     import EdgeProcessor.chunkDeSerialize
 
     def toSnapshotInfo(info: SnapshotInfoSer) = {
-      val lastSnapshot = KryoSerializer.deserializeCast[String](info.snapshot)
+      val lastSnapshot = info.snapshot.map(KryoSerializer.deserializeCast[String]).head
       val snapshotCheckpointBlocks =
-        info.snapshotCheckpointBlocks.toSeq.flatMap(chunkDeSerialize[Array[String]](_, "checkpointBlocks"))
+        info.snapshotCheckpointBlocks.toSeq.flatMap(chunkDeSerialize[Seq[String]](_, "checkpointBlocks"))
       SnapshotInfo(
         Snapshot(lastSnapshot, snapshotCheckpointBlocks),
-        info.acceptedCBSinceSnapshot.toSeq.flatMap(chunkDeSerialize[Array[String]](_, "acceptedCBSinceSnapshot")),
+        info.acceptedCBSinceSnapshot.toSeq.flatMap(chunkDeSerialize[Seq[String]](_, "acceptedCBSinceSnapshot")),
         info.acceptedCBSinceSnapshotCache.toSeq
-          .flatMap(chunkDeSerialize[Array[CheckpointCache]](_, "acceptedCBSinceSnapshot")),
-        KryoSerializer.deserializeCast[Int](info.lastSnapshotHeight),
-        info.snapshotHashes.toSeq.flatMap(chunkDeSerialize[Array[String]](_, "snapshotHashes")),
+          .flatMap(chunkDeSerialize[Seq[CheckpointCache]](_, "acceptedCBSinceSnapshot")),
+        info.lastSnapshotHeight.map(KryoSerializer.deserializeCast[Int]).head,
+        info.snapshotHashes.toSeq.flatMap(chunkDeSerialize[Seq[String]](_, "snapshotHashes")),
         info.addressCacheData.toSeq
-          .flatMap(chunkDeSerialize[Array[(String, AddressCacheData)]](_, "addressCacheData"))
+          .flatMap(chunkDeSerialize[Seq[(String, AddressCacheData)]](_, "addressCacheData"))
           .toMap,
-        info.tips.toSeq.flatMap(chunkDeSerialize[Array[(String, TipData)]](_, "tips")).toMap,
-        info.snapshotCache.toSeq.flatMap(chunkDeSerialize[Array[CheckpointCache]](_, "snapshotCache")),
+        info.tips.toSeq.flatMap(chunkDeSerialize[Seq[(String, TipData)]](_, "tips")).toMap,
+        info.snapshotCache.toSeq.flatMap(chunkDeSerialize[Seq[CheckpointCache]](_, "snapshotCache")),
         info.lastAcceptedTransactionRef.toSeq
-          .flatMap(chunkDeSerialize[Array[(String, LastTransactionRef)]](_, "lastAcceptedTransactionRef"))
+          .flatMap(chunkDeSerialize[Seq[(String, LastTransactionRef)]](_, "lastAcceptedTransactionRef"))
           .toMap
       )
     }
