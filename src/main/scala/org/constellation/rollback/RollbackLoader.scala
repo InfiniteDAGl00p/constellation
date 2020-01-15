@@ -1,10 +1,9 @@
 package org.constellation.rollback
 
 import better.files.File
-import org.constellation.consensus.{SnapshotInfo, SnapshotInfoSer, StoredSnapshot, TipData}
-import org.constellation.primitives.Schema.{AddressCacheData, CheckpointCache, GenesisObservation}
+import org.constellation.consensus.{SnapshotInfo, SnapshotInfoSer, StoredSnapshot}
+import org.constellation.primitives.Schema.GenesisObservation
 import org.constellation.serializer.KryoSerializer
-import constellation._
 
 import scala.util.Try
 

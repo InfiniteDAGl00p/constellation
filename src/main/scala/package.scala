@@ -12,14 +12,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.common.hash.Hashing
 import org.constellation.DAO
-import org.constellation.domain.observation.{
-  CheckpointBlockInvalid,
-  CheckpointBlockWithMissingParents,
-  CheckpointBlockWithMissingSoe,
-  RequestTimeoutOnConsensus,
-  RequestTimeoutOnResolving,
-  SnapshotMisalignment
-}
+import org.constellation.domain.observation._
 import org.constellation.keytool.KeyUtils._
 import org.constellation.primitives.Schema._
 import org.constellation.schema.Id
