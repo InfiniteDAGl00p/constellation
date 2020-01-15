@@ -1,17 +1,16 @@
 package org.constellation.checkpoint
 
-import cats.data.{Ior, NonEmptyList, Validated, ValidatedNel}
+import cats.data.{Ior, NonEmptyList, ValidatedNel}
 import cats.effect.{IO, Sync}
 import cats.implicits._
 import io.chrisdavenport.log4cats.SelfAwareStructuredLogger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
-import org.constellation.{ConfigUtil, DAO}
-import org.constellation.checkpoint.CheckpointBlockValidator.ValidationResult
-import org.constellation.domain.transaction.{TransactionService, TransactionValidator}
+import org.constellation.domain.transaction.TransactionValidator
 import org.constellation.primitives.Schema.CheckpointCache
-import org.constellation.primitives.{CheckpointBlock, Transaction, TransactionCacheData}
+import org.constellation.primitives.{CheckpointBlock, Transaction}
 import org.constellation.storage.{AddressService, SnapshotService}
 import org.constellation.util.{HashSignature, Metrics}
+import org.constellation.{ConfigUtil, DAO}
 
 object CheckpointBlockValidator {
 
@@ -236,15 +235,20 @@ class CheckpointBlockValidator[F[_]: Sync](
           validateEmptySignatures(cb.signatures)
             .product(validateSignatures(cb.signatures, cb.baseHash))
         )
-        transactionValidation <- validateTransactions(cb.transactions)
-        duplicatedTransactions <- Sync[F].delay(validateDuplicatedTransactions(cb.transactions))
-        balanceValidation <- validateSourceAddressBalances(cb.transactions)
-      } yield staticValidation.product(transactionValidation).product(duplicatedTransactions).product(balanceValidation)
+        transactionValidation <- validateCheckpointBlockTransactions(cb)
+      } yield staticValidation.product(transactionValidation)
 
     snapshotService.lastSnapshotHeight.get
       .map(_ == 0)
       .ifM(preTreeResult.map(_.map(_ => cb)), preTreeResult.map(_.map(_ => cb)))
   }
+
+  def validateCheckpointBlockTransactions(cb: CheckpointBlock): F[ValidationResult[List[Transaction]]] =
+    for {
+      transactionValidation <- validateTransactions(cb.transactions)
+      duplicatedTransactions <- Sync[F].delay(validateDuplicatedTransactions(cb.transactions))
+      balanceValidation <- validateSourceAddressBalances(cb.transactions)
+    } yield transactionValidation.product(duplicatedTransactions).product(balanceValidation)
 
   def getTransactionsTillSnapshot(
     cbs: List[CheckpointBlock]

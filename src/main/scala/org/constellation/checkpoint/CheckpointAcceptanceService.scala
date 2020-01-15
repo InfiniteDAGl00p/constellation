@@ -161,6 +161,11 @@ class CheckpointAcceptanceService[F[_]: Concurrent: Timer](
               .flatMap(_ => Sync[F].raiseError[Unit](TipConflictException(cb, conflicts)))
         }
 
+        _ <- logger.info(s"[Accept checkpoint][${cb.baseHash}] Checking transactions")
+        validationTxs <- checkpointBlockValidator.validateCheckpointBlockTransactions(cb)
+        invalidTxsHashes = cb.transactions.diff(validationTxs.toEither.getOrElse(Seq.empty)).map(_.baseHash).toList
+        _ <- logger.info(s"[Accept checkpoint][${cb.baseHash}] Invalid transactions : s${invalidTxsHashes.size}")
+
         _ <- logger.debug(s"[Accept checkpoint][${cb.baseHash}] Checking validation")
         validation <- checkpointBlockValidator.simpleValidation(cb)
         _ <- if (!validation.isValid)
