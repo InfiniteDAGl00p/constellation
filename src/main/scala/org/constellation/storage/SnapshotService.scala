@@ -21,6 +21,7 @@ import org.constellation.schema.Id
 import org.constellation.trust.TrustManager
 import org.constellation.util.Metrics
 import org.constellation.{ConfigUtil, ConstellationExecutionContext, DAO}
+import constellation.getCCParams
 
 class SnapshotService[F[_]: Concurrent](
   concurrentTipService: ConcurrentTipService[F],
@@ -111,11 +112,6 @@ class SnapshotService[F[_]: Concurrent](
             logger.debug(s"SnapshotInfo part written for path: $path")
         }
       )
-
-  def getCCParams(cc: Product) = {
-    val values = cc.productIterator
-    cc.getClass.getDeclaredFields.map(_.getName -> values.next).toList
-  }
 
   def writeSnapshotInfoPartsToDisk(info: SnapshotInfo, basePath: String = dao.snapshotInfoPath.pathAsString) = {
     val infoSer = info.toSnapshotInfoSer()

@@ -289,7 +289,7 @@ case class SnapshotInfoSer(snapshot: Array[Array[Byte]],
                              lastAcceptedTransactionRef: Array[Array[Byte]]) {
     import EdgeProcessor.chunkDeSerialize
 
-    def toSnapshotInfo(info: SnapshotInfoSer) = {
+    def toSnapshotInfo(info: SnapshotInfoSer = this) = {
       val lastSnapshot = info.snapshot.map(KryoSerializer.deserializeCast[String]).head
       val snapshotCheckpointBlocks =
         info.snapshotCheckpointBlocks.toSeq.flatMap(chunkDeSerialize[Seq[String]](_, "checkpointBlocks"))
@@ -309,6 +309,17 @@ case class SnapshotInfoSer(snapshot: Array[Array[Byte]],
           .flatMap(chunkDeSerialize[Seq[(String, LastTransactionRef)]](_, "lastAcceptedTransactionRef"))
           .toMap
       )
+    }
+
+    def writeSnapshotInfoPartsToDisk(infoSer: SnapshotInfoSer = this, basePath: String = "rollback_info") = {
+      val infoSerParts = getCCParams(infoSer).asInstanceOf[List[(String, Array[Array[Byte]])]]
+      val plan = infoSerParts.flatMap {
+        case (k, parts) =>
+          parts.zipWithIndex.map {
+            case (part, idx) => (s"$basePath-$k-$idx", part)
+          }
+      }
+      plan.foreach { case (path, part) => File("rollback_data", path).writeByteArray(part) }
     }
   }
 

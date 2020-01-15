@@ -1,5 +1,6 @@
 package org.constellation.rollback
 
+import better.files.File
 import org.mockito.ArgumentMatchersSugar
 import org.scalatest.{BeforeAndAfter, FreeSpec, Matchers}
 

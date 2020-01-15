@@ -6,13 +6,15 @@ import akka.util.Timeout
 import better.files.File
 import cats.effect.{ContextShift, IO}
 import org.constellation._
-import org.constellation.consensus.StoredSnapshot
+import org.constellation.consensus.{SnapshotInfo, StoredSnapshot}
 import org.constellation.primitives.Schema.{GenesisObservation, SendToAddress}
 import org.constellation.keytool.KeyUtils
 import org.constellation.primitives.Schema.GenesisObservation
 import org.constellation.primitives._
 import org.constellation.serializer.KryoSerializer
 import org.constellation.util.{APIClient, AccountBalance, Metrics, Simulation}
+import constellation.getCCParams
+import better.files.File
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -204,12 +206,7 @@ class E2ETest extends E2E {
 
   private def storeSnapshotInfo(allAPIs: Seq[APIClient]): Unit = {
     val snapshotInfo = allAPIs.map(_.snapshotsInfoDownload())
-
-    snapshotInfo.foreach(s => {
-      better.files
-        .File("rollback_data", "rollback_info")
-        .writeByteArray(KryoSerializer.serializeAnyRef(s))
-    })
+    snapshotInfo.foreach(_.toSnapshotInfoSer().writeSnapshotInfoPartsToDisk())
   }
 
   private def storeGenesis(allAPIs: Seq[APIClient]): Unit = {
